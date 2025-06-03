@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +19,7 @@ import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react-native';
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -29,12 +29,11 @@ export default function LoginScreen() {
     email: '',
     password: '',
   });
-  
+
   const validateForm = (): boolean => {
     let isValid = true;
     const newErrors = { email: '', password: '' };
-    
-    // Email validation
+
     if (!email) {
       newErrors.email = 'Email is required';
       isValid = false;
@@ -42,8 +41,7 @@ export default function LoginScreen() {
       newErrors.email = 'Email is invalid';
       isValid = false;
     }
-    
-    // Password validation
+
     if (!password) {
       newErrors.password = 'Password is required';
       isValid = false;
@@ -51,41 +49,61 @@ export default function LoginScreen() {
       newErrors.password = 'Password must be at least 6 characters';
       isValid = false;
     }
-    
+
     setErrors(newErrors);
     return isValid;
   };
-  
+
   const handleLogin = async () => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
-    
+
     try {
-      await signIn(email, password, isAdmin);
-      router.replace('/(tabs)');
-    } catch (error) {
+      const { success, error } = await signIn(email, password, isAdmin);
+
+      if (success) {
+        // Show success message with role information
+        Alert.alert(
+          'Login Successful',
+          `Welcome back! You're logged in as ${
+            isAdmin ? 'an admin' : 'a customer'
+          }`,
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                router.replace(isAdmin ? '/(admin)' : '/(tabs)');
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(error || 'Login failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
       Alert.alert(
         'Login Failed',
-        'Invalid email or password. Please try again.',
+        error.message || 'Invalid email or password. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
@@ -95,7 +113,7 @@ export default function LoginScreen() {
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Log in to your HimalByte account</Text>
         </View>
-        
+
         <View style={styles.form}>
           <Input
             label="Email"
@@ -108,7 +126,7 @@ export default function LoginScreen() {
             leftIcon={<Mail size={20} color={Colors.neutral[500]} />}
             error={errors.email}
           />
-          
+
           <Input
             label="Password"
             placeholder="••••••••"
@@ -118,29 +136,28 @@ export default function LoginScreen() {
             autoCapitalize="none"
             leftIcon={<Lock size={20} color={Colors.neutral[500]} />}
             rightIcon={
-              showPassword 
-                ? <EyeOff size={20} color={Colors.neutral[500]} /> 
-                : <Eye size={20} color={Colors.neutral[500]} />
+              showPassword ? (
+                <EyeOff size={20} color={Colors.neutral[500]} />
+              ) : (
+                <Eye size={20} color={Colors.neutral[500]} />
+              )
             }
             onRightIconPress={() => setShowPassword(!showPassword)}
             error={errors.password}
           />
-          
+
           <View style={styles.adminContainer}>
-            <TouchableOpacity 
-              style={styles.checkboxContainer} 
+            <TouchableOpacity
+              style={styles.checkboxContainer}
               onPress={() => setIsAdmin(!isAdmin)}
             >
-              <View style={[
-                styles.checkbox,
-                isAdmin && styles.checkboxActive
-              ]}>
+              <View style={[styles.checkbox, isAdmin && styles.checkboxActive]}>
                 {isAdmin && <View style={styles.checkboxInner} />}
               </View>
               <Text style={styles.adminText}>Login as Admin</Text>
             </TouchableOpacity>
           </View>
-          
+
           <Button
             title="Log In"
             onPress={handleLogin}
@@ -148,7 +165,7 @@ export default function LoginScreen() {
             fullWidth
             style={styles.loginButton}
           />
-          
+
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>Don't have an account?</Text>
             <TouchableOpacity onPress={() => router.push('/auth/register')}>
