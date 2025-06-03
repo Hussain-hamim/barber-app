@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -19,7 +19,7 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from 'lucide-react-native';
 export default function RegisterScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
-  
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,13 +27,14 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // Add admin toggle
   const [errors, setErrors] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
-  
+
   const validateForm = (): boolean => {
     let isValid = true;
     const newErrors = {
@@ -42,14 +43,12 @@ export default function RegisterScreen() {
       password: '',
       confirmPassword: '',
     };
-    
-    // Name validation
+
     if (!name.trim()) {
       newErrors.name = 'Name is required';
       isValid = false;
     }
-    
-    // Email validation
+
     if (!email) {
       newErrors.email = 'Email is required';
       isValid = false;
@@ -57,8 +56,7 @@ export default function RegisterScreen() {
       newErrors.email = 'Email is invalid';
       isValid = false;
     }
-    
-    // Password validation
+
     if (!password) {
       newErrors.password = 'Password is required';
       isValid = false;
@@ -66,8 +64,7 @@ export default function RegisterScreen() {
       newErrors.password = 'Password must be at least 6 characters';
       isValid = false;
     }
-    
-    // Confirm password validation
+
     if (!confirmPassword) {
       newErrors.confirmPassword = 'Please confirm your password';
       isValid = false;
@@ -75,41 +72,61 @@ export default function RegisterScreen() {
       newErrors.confirmPassword = 'Passwords do not match';
       isValid = false;
     }
-    
+
     setErrors(newErrors);
     return isValid;
   };
-  
+
   const handleRegister = async () => {
     if (!validateForm()) return;
-    
+
     setLoading(true);
-    
+
     try {
       await signUp(name, email, password);
-      router.replace('/(tabs)');
-    } catch (error) {
+
+      // Show success message
+      Alert.alert(
+        'Registration Successful',
+        'Your account has been created successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to appropriate screen based on admin status
+              if (isAdmin) {
+                router.replace('/(admin)');
+              } else {
+                router.replace('/(tabs)');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Registration error:', error);
       Alert.alert(
         'Registration Failed',
-        'There was a problem creating your account. Please try again.',
+        error.message ||
+          'There was a problem creating your account. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
       setLoading(false);
     }
   };
-  
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
@@ -117,9 +134,11 @@ export default function RegisterScreen() {
 
         <View style={styles.header}>
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to book your next appointment</Text>
+          <Text style={styles.subtitle}>
+            Sign up to book your next appointment
+          </Text>
         </View>
-        
+
         <View style={styles.form}>
           <Input
             label="Full Name"
@@ -130,7 +149,7 @@ export default function RegisterScreen() {
             leftIcon={<User size={20} color={Colors.neutral[500]} />}
             error={errors.name}
           />
-          
+
           <Input
             label="Email"
             placeholder="your@email.com"
@@ -142,7 +161,7 @@ export default function RegisterScreen() {
             leftIcon={<Mail size={20} color={Colors.neutral[500]} />}
             error={errors.email}
           />
-          
+
           <Input
             label="Password"
             placeholder="••••••••"
@@ -152,14 +171,16 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             leftIcon={<Lock size={20} color={Colors.neutral[500]} />}
             rightIcon={
-              showPassword 
-                ? <EyeOff size={20} color={Colors.neutral[500]} /> 
-                : <Eye size={20} color={Colors.neutral[500]} />
+              showPassword ? (
+                <EyeOff size={20} color={Colors.neutral[500]} />
+              ) : (
+                <Eye size={20} color={Colors.neutral[500]} />
+              )
             }
             onRightIconPress={() => setShowPassword(!showPassword)}
             error={errors.password}
           />
-          
+
           <Input
             label="Confirm Password"
             placeholder="••••••••"
@@ -169,14 +190,32 @@ export default function RegisterScreen() {
             autoCapitalize="none"
             leftIcon={<Lock size={20} color={Colors.neutral[500]} />}
             rightIcon={
-              showConfirmPassword 
-                ? <EyeOff size={20} color={Colors.neutral[500]} /> 
-                : <Eye size={20} color={Colors.neutral[500]} />
+              showConfirmPassword ? (
+                <EyeOff size={20} color={Colors.neutral[500]} />
+              ) : (
+                <Eye size={20} color={Colors.neutral[500]} />
+              )
             }
-            onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            onRightIconPress={() =>
+              setShowConfirmPassword(!showConfirmPassword)
+            }
             error={errors.confirmPassword}
           />
-          
+
+          {/* Admin toggle */}
+          <View style={styles.adminToggle}>
+            <Text style={styles.adminLabel}>Register as admin?</Text>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                isAdmin && styles.toggleButtonActive,
+              ]}
+              onPress={() => setIsAdmin(!isAdmin)}
+            >
+              <Text style={styles.toggleText}>{isAdmin ? 'Yes' : 'No'}</Text>
+            </TouchableOpacity>
+          </View>
+
           <Button
             title="Sign Up"
             onPress={handleRegister}
@@ -184,7 +223,7 @@ export default function RegisterScreen() {
             fullWidth
             style={styles.registerButton}
           />
-          
+
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>Already have an account?</Text>
             <TouchableOpacity onPress={() => router.push('/auth/login')}>
@@ -246,5 +285,33 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.md,
     color: Colors.primary[600],
     marginLeft: 5,
+  },
+  adminToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  adminLabel: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[600],
+  },
+  toggleButton: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.neutral[300],
+  },
+  toggleButtonActive: {
+    backgroundColor: Colors.primary[100],
+    borderColor: Colors.primary[600],
+  },
+  toggleText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[700],
   },
 });

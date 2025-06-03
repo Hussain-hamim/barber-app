@@ -1,126 +1,102 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-type UserType = {
-  id: string;
-  name: string;
-  email: string;
-  isAdmin: boolean;
-} | null;
+// @/context/AuthContext.tsx
+import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
 
 type AuthContextType = {
-  user: UserType;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  signIn: (email: string, password: string, isAdmin: boolean) => Promise<void>;
+  session: Session | null;
   signUp: (name: string, email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  loading: boolean;
 };
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isLoading: true,
-  isAuthenticated: false,
-  signIn: async () => {},
-  signUp: async () => {},
-  signOut: async () => {},
-});
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-export const useAuth = () => useContext(AuthContext);
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserType>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
-    const bootstrapAsync = async () => {
-      try {
-        const userString = await AsyncStorage.getItem('@user');
-        if (userString) {
-          setUser(JSON.parse(userString));
-        }
-      } catch (e) {
-        console.error('Failed to load user data', e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-    bootstrapAsync();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string, isAdmin: boolean) => {
-    setIsLoading(true);
+  const signUp = async (name: string, email: string, password: string) => {
+    setLoading(true);
     try {
-      // Mock authentication - in a real app, you'd validate against an API
-      // Simulating a network request with timeout
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockUser = {
-        id: '1',
-        name: email.split('@')[0],
+      const { data, error } = await supabase.auth.signUp({
         email,
-        isAdmin,
-      };
-      
-      await AsyncStorage.setItem('@user', JSON.stringify(mockUser));
-      setUser(mockUser);
-    } catch (e) {
-      console.error('Sign in failed', e);
-      throw new Error('Authentication failed');
+        password,
+        options: {
+          data: {
+            name,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // Insert into profiles table
+      if (data.user) {
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          name: name,
+          email: email,
+          is_admin: false,
+        });
+      }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const signUp = async (name: string, email: string, password: string) => {
-    setIsLoading(true);
+  const signIn = async (email: string, password: string) => {
+    setLoading(true);
     try {
-      // Mock registration - in a real app, you'd make an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newUser = {
-        id: Math.random().toString(36).substring(2, 9),
-        name,
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        isAdmin: false,
-      };
-      
-      await AsyncStorage.setItem('@user', JSON.stringify(newUser));
-      setUser(newUser);
-    } catch (e) {
-      console.error('Sign up failed', e);
-      throw new Error('Registration failed');
+        password,
+      });
+      if (error) throw error;
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
-    setIsLoading(true);
+    setLoading(true);
     try {
-      await AsyncStorage.removeItem('@user');
-      setUser(null);
-    } catch (e) {
-      console.error('Sign out failed', e);
+      await supabase.auth.signOut();
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        isLoading, 
-        isAuthenticated: !!user, 
-        signIn, 
-        signUp, 
-        signOut 
+    <AuthContext.Provider
+      value={{
+        session,
+        signUp,
+        signIn,
+        signOut,
+        loading,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
 };
+
+export const useAuth = () => useContext(AuthContext);
