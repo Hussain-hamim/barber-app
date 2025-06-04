@@ -73,7 +73,7 @@ export default function LoginScreen() {
             {
               text: 'Continue',
               onPress: () => {
-                router.replace(isAdmin ? '/(admin)' : '/(tabs)');
+                router.replace('/(tabs)');
               },
             },
           ]

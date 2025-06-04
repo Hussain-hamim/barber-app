@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { BARBERS, Barber } from '@/constants/data';
 import {
   Colors,
   Typography,
@@ -23,34 +22,85 @@ import {
 import { getFavorites, toggleBarberFavorite } from '@/utils/storage';
 import { Heart, Search, Plus, Star } from 'lucide-react-native';
 import Button from '@/components/Button';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
 
 const { height, width } = Dimensions.get('window');
 const CARD_HEIGHT = height * 0.48;
 const CARD_MARGIN = Spacing.md;
 
+interface Barber {
+  id: string; // Changed from number to string since Supabase uses UUID
+  name: string;
+  experience: string;
+  image_url: string;
+  rating: number;
+  about?: string;
+  is_active?: boolean;
+  isFavorite?: boolean;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
-
   const [barbers, setBarbers] = useState<Barber[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]); // Changed to string[] for UUID
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+
+  const isAdmin = profile?.is_admin;
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setSession(session);
+
+      if (session) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(data || null);
+      }
+    };
+    fetchUser();
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Load favorites from storage
         const storedFavorites = await getFavorites();
         setFavorites(storedFavorites);
 
-        const barbersWithFavorites = BARBERS.map((barber) => ({
-          ...barber,
-          isFavorite: storedFavorites.includes(barber.id),
-        }));
+        // Fetch barbers from Supabase
+        const { data: barbersData, error } = await supabase
+          .from('barbers')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+
+        if (error) throw error;
+
+        // Merge with favorites data
+        const barbersWithFavorites =
+          barbersData?.map((barber) => ({
+            ...barber,
+            isFavorite: storedFavorites.includes(barber.id),
+            image: barber.image_url, // Map to match your existing component props
+          })) || [];
 
         setBarbers(barbersWithFavorites);
       } catch (error) {
         console.error('Error loading data:', error);
+        Alert.alert('Error', 'Failed to load barbers data');
       } finally {
         setLoading(false);
       }
@@ -59,7 +109,7 @@ export default function HomeScreen() {
     loadData();
   }, []);
 
-  const handleToggleFavorite = async (barberId: number) => {
+  const handleToggleFavorite = async (barberId: string) => {
     try {
       const newFavoriteState = await toggleBarberFavorite(barberId);
 
@@ -78,21 +128,21 @@ export default function HomeScreen() {
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
+      Alert.alert('Error', 'Failed to update favorites');
     }
   };
 
   const navigateToServiceDetails = (barber: Barber) => {
-    // This now works correctly for both admin and regular users
     if (isAdmin) {
       router.push({
         pathname: '/admin/services',
-        params: { barberId: barber.id.toString() },
+        params: { barberId: barber.id },
       });
     } else {
       router.push({
         pathname: '/services',
         params: {
-          barberId: barber.id.toString(),
+          barberId: barber.id,
           barberName: barber.name,
         },
       });
@@ -105,10 +155,9 @@ export default function HomeScreen() {
       onPress={() => navigateToServiceDetails(item)}
       activeOpacity={0.9}
     >
-      {/* Full-width image */}
       <View style={styles.imageWrapper}>
         <Image
-          source={{ uri: item.image }}
+          source={{ uri: item.image_url || 'https://via.placeholder.com/150' }}
           style={styles.fullWidthImage}
           resizeMode="cover"
         />
@@ -116,7 +165,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.favoriteButton}
             onPress={(e) => {
-              e.stopPropagation(); // Prevent triggering the card press
+              e.stopPropagation();
               handleToggleFavorite(item.id);
             }}
           >
@@ -129,7 +178,6 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Details section */}
       <View style={styles.detailsWrapper}>
         <View style={styles.nameRatingRow}>
           <Text style={styles.barberName} numberOfLines={1}>
@@ -160,9 +208,9 @@ export default function HomeScreen() {
                 router.push({
                   pathname: '/admin/edit-barber',
                   params: {
-                    barberId: item.id.toString(),
+                    barberId: item.id,
                     barberName: item.name,
-                    barberImage: item.image,
+                    barberImage: item.image_url,
                     barberExperience: item.experience,
                     barberRating: item.rating?.toString(),
                   },
@@ -185,8 +233,6 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
-  // ... keep your existing styles
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -202,7 +248,7 @@ export default function HomeScreen() {
           <Text style={styles.welcomeText}>
             {isAdmin
               ? 'Admin Dashboard'
-              : 'Hello, ' + (user?.name || 'there') + '!'}
+              : 'Hello, ' + (profile?.name || 'there') + '!'}
           </Text>
           <Text style={styles.subtitleText}>
             {isAdmin ? 'Manage your barber shop' : 'Book your next appointment'}
@@ -235,11 +281,16 @@ export default function HomeScreen() {
         <FlatList
           data={barbers}
           renderItem={renderBarberItem}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          snapToInterval={CARD_HEIGHT + CARD_MARGIN}
+          // snapToInterval={CARD_HEIGHT + CARD_MARGIN}
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No barbers available</Text>
+            </View>
+          }
         />
       </View>
     </SafeAreaView>
@@ -250,6 +301,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: Spacing['4xl'],
+  },
+  emptyText: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[500],
   },
   loadingContainer: {
     flex: 1,

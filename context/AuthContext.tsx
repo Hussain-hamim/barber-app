@@ -6,35 +6,57 @@ import { Session } from '@supabase/supabase-js';
 type AuthContextType = {
   session: Session | null;
   signUp: (name: string, email: string, password: string) => Promise<void>;
-  signIn: (email: string, password: string, isAdmin: boolean) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    isAdmin: boolean
+  ) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
-  loading: boolean;
+  isLoading: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    const initializeSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (mounted) {
+          setSession(session);
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    initializeSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (name: string, email: string, password: string) => {
-    setLoading(true);
+    setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -48,7 +70,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
 
-      // Insert into profiles table
       if (data.user) {
         await supabase.from('profiles').insert({
           id: data.user.id,
@@ -58,7 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         });
       }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -66,8 +87,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     email: string,
     password: string,
     isAdmin: boolean = false
-  ) => {
-    setLoading(true);
+  ): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -75,16 +96,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       if (error) {
-        // Handle specific error cases
         if (error.message.includes('Email not confirmed')) {
-          // If you want to auto-confirm emails (not recommended for production)
           await supabase.auth.signInWithPassword({ email, password });
           return { success: true };
         }
         throw error;
       }
 
-      // Admin verification logic remains the same
       if (isAdmin && data.user) {
         const { data: profile } = await supabase
           .from('profiles')
@@ -102,16 +120,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error: any) {
       return { success: false, error: error.message };
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const signOut = async () => {
-    setLoading(true);
+    setIsLoading(true);
     try {
       await supabase.auth.signOut();
+      setSession(null);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -122,7 +141,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signUp,
         signIn,
         signOut,
-        loading,
+        isLoading,
       }}
     >
       {children}

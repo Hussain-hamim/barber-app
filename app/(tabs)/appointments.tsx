@@ -1,15 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator 
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/theme';
+import {
+  Colors,
+  Typography,
+  Spacing,
+  Radius,
+  Shadows,
+} from '@/constants/theme';
 import { getAppointments, updateAppointment } from '@/utils/storage';
 import { BARBERS, SERVICES, Appointment } from '@/constants/data';
 import { Calendar, Clock, User, MapPin, X } from 'lucide-react-native';
@@ -23,10 +29,38 @@ type AppointmentWithDetails = Appointment & {
 
 export default function AppointmentsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
-  
-  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
+
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState(null);
+
+  const isAdmin = profile?.is_admin;
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setSession(session);
+
+      // fetch profile
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session?.user.id)
+        .single();
+
+      setProfile(data || null);
+    };
+    fetchUser();
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session); // for real-time session change update
+    });
+  }, []);
+
+  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,14 +70,14 @@ export default function AppointmentsScreen() {
   const loadAppointments = async () => {
     try {
       const storedAppointments = await getAppointments();
-      
+
       // Add barber and service names to appointments
-      const enhancedAppointments = storedAppointments.map(appointment => {
-        const barber = BARBERS.find(b => b.id === appointment.barberId);
-        const service = SERVICES.find(s => s.id === appointment.serviceId);
-        
+      const enhancedAppointments = storedAppointments.map((appointment) => {
+        const barber = BARBERS.find((b) => b.id === appointment.barberId);
+        const service = SERVICES.find((s) => s.id === appointment.serviceId);
+
         const formattedDate = formatDate(appointment.date);
-        
+
         return {
           ...appointment,
           barberName: barber?.name || 'Unknown Barber',
@@ -51,7 +85,7 @@ export default function AppointmentsScreen() {
           formattedDate,
         };
       });
-      
+
       setAppointments(enhancedAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
@@ -59,31 +93,33 @@ export default function AppointmentsScreen() {
       setLoading(false);
     }
   };
-  
+
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
-    
+
     const [year, month, day] = dateString.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    
+
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
     });
   };
-  
+
   const handleCancelAppointment = async (appointmentId: string) => {
     try {
       await updateAppointment(appointmentId, { status: 'cancelled' });
-      setAppointments(appointments.map(appt => 
-        appt.id === appointmentId ? { ...appt, status: 'cancelled' } : appt
-      ));
+      setAppointments(
+        appointments.map((appt) =>
+          appt.id === appointmentId ? { ...appt, status: 'cancelled' } : appt
+        )
+      );
     } catch (error) {
       console.error('Error cancelling appointment:', error);
     }
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'confirmed':
@@ -99,41 +135,61 @@ export default function AppointmentsScreen() {
     }
   };
 
-  const renderAppointmentItem = ({ item }: { item: AppointmentWithDetails }) => (
+  const renderAppointmentItem = ({
+    item,
+  }: {
+    item: AppointmentWithDetails;
+  }) => (
     <View style={styles.appointmentCard}>
       <View style={styles.cardHeader}>
-        <View style={[
-          styles.statusBadge, 
-          { backgroundColor: getStatusColor(item.status) }
-        ]}>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(item.status) },
+          ]}
+        >
           <Text style={styles.statusText}>
             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </Text>
         </View>
-        
+
         {item.status === 'pending' && !isAdmin && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => handleCancelAppointment(item.id)}
           >
             <X size={16} color={Colors.neutral[600]} />
           </TouchableOpacity>
         )}
-        
+
         {isAdmin && (
           <View style={styles.adminActions}>
             {item.status === 'pending' && (
-              <TouchableOpacity 
-                style={[styles.adminActionButton, { backgroundColor: Colors.success[500] }]}
-                onPress={() => updateAppointment(item.id, { status: 'confirmed' }).then(loadAppointments)}
+              <TouchableOpacity
+                style={[
+                  styles.adminActionButton,
+                  { backgroundColor: Colors.success[500] },
+                ]}
+                onPress={() =>
+                  updateAppointment(item.id, { status: 'confirmed' }).then(
+                    loadAppointments
+                  )
+                }
               >
                 <Text style={styles.adminActionText}>Confirm</Text>
               </TouchableOpacity>
             )}
             {(item.status === 'pending' || item.status === 'confirmed') && (
-              <TouchableOpacity 
-                style={[styles.adminActionButton, { backgroundColor: Colors.error[500] }]}
-                onPress={() => updateAppointment(item.id, { status: 'cancelled' }).then(loadAppointments)}
+              <TouchableOpacity
+                style={[
+                  styles.adminActionButton,
+                  { backgroundColor: Colors.error[500] },
+                ]}
+                onPress={() =>
+                  updateAppointment(item.id, { status: 'cancelled' }).then(
+                    loadAppointments
+                  )
+                }
               >
                 <Text style={styles.adminActionText}>Cancel</Text>
               </TouchableOpacity>
@@ -141,31 +197,23 @@ export default function AppointmentsScreen() {
           </View>
         )}
       </View>
-      
+
       <View style={styles.appointmentInfo}>
-        <Text style={styles.appointmentService}>
-          {item.serviceName}
-        </Text>
-        
+        <Text style={styles.appointmentService}>{item.serviceName}</Text>
+
         <View style={styles.infoItem}>
           <User size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>
-            {item.barberName}
-          </Text>
+          <Text style={styles.infoText}>{item.barberName}</Text>
         </View>
-        
+
         <View style={styles.infoItem}>
           <Calendar size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>
-            {item.formattedDate}
-          </Text>
+          <Text style={styles.infoText}>{item.formattedDate}</Text>
         </View>
-        
+
         <View style={styles.infoItem}>
           <Clock size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>
-            {item.time}
-          </Text>
+          <Text style={styles.infoText}>{item.time}</Text>
         </View>
       </View>
     </View>
@@ -186,7 +234,7 @@ export default function AppointmentsScreen() {
           {isAdmin ? 'All Appointments' : 'Your Appointments'}
         </Text>
       </View>
-      
+
       <View style={styles.content}>
         {appointments.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -194,7 +242,7 @@ export default function AppointmentsScreen() {
             <Text style={styles.emptyText}>
               Your scheduled appointments will appear here
             </Text>
-            
+
             {!isAdmin && (
               <Button
                 title="Book an Appointment"
@@ -218,6 +266,8 @@ export default function AppointmentsScreen() {
 }
 
 import Button from '@/components/Button';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 const styles = StyleSheet.create({
   container: {

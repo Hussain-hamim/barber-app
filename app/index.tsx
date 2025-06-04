@@ -3,22 +3,25 @@ import { View, Text, StyleSheet, Image, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Colors, Typography, Spacing } from '@/constants/theme';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
-  
+  const { session, isLoading } = useAuth();
+
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
-    // If user is already authenticated, redirect to main app
-    if (isAuthenticated) {
+    if (isLoading) return;
+
+    // If user is already authenticated, redirect to appropriate screen
+    if (session) {
       router.replace('/(tabs)');
       return;
     }
-    
-    // Animation sequence
+
+    // Only run animations if not loading and no session
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -30,22 +33,24 @@ export default function LandingScreen() {
         friction: 8,
         tension: 40,
         useNativeDriver: true,
-      })
+      }),
     ]).start();
-  }, [isAuthenticated, isLoading]);
+  }, [session, isLoading]);
 
-  // Wait for auth check before rendering
-  if (isLoading) return null;
-  
+  // Show nothing while loading
+  if (isLoading) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
-      <Animated.View 
+      <Animated.View
         style={[
           styles.contentContainer,
           {
             opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }]
-          }
+            transform: [{ scale: scaleAnim }],
+          },
         ]}
       >
         <View style={styles.logoContainer}>
@@ -54,41 +59,48 @@ export default function LandingScreen() {
         </View>
 
         <View style={styles.imageContainer}>
-          <Image 
-            source={{ uri: 'https://images.pexels.com/photos/3998422/pexels-photo-3998422.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2' }}
+          <Image
+            source={{
+              uri: 'https://images.pexels.com/photos/3998422/pexels-photo-3998422.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+            }}
             style={styles.image}
             resizeMode="cover"
           />
         </View>
-        
+
         <View style={styles.buttonContainer}>
-          <Animated.View 
-            style={{ 
-              opacity: fadeAnim, 
-              transform: [{ translateY: fadeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [20, 0]
-              })}] 
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [
+                {
+                  translateY: fadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0],
+                  }),
+                },
+              ],
             }}
           >
             <Text style={styles.welcomeText}>
               Book your next haircut with ease
             </Text>
             <Text style={styles.descriptionText}>
-              Find the perfect barber, choose your service, and schedule appointments in just a few taps
+              Find the perfect barber, choose your service, and schedule
+              appointments in just a few taps
             </Text>
           </Animated.View>
-          
+
           <View style={styles.buttonGroup}>
-            <TouchableButton 
+            <TouchableButton
               label="Log In"
               onPress={() => router.push('/auth/login')}
               variant="primary"
               delay={200}
               fadeAnim={fadeAnim}
             />
-            
-            <TouchableButton 
+
+            <TouchableButton
               label="Register"
               onPress={() => router.push('/auth/register')}
               variant="outline"
@@ -110,9 +122,15 @@ interface TouchableButtonProps {
   fadeAnim: Animated.Value;
 }
 
-const TouchableButton: React.FC<TouchableButtonProps> = ({ label, onPress, variant, delay, fadeAnim }) => {
+const TouchableButton: React.FC<TouchableButtonProps> = ({
+  label,
+  onPress,
+  variant,
+  delay,
+  fadeAnim,
+}) => {
   const buttonAnim = React.useRef(new Animated.Value(0)).current;
-  
+
   React.useEffect(() => {
     Animated.timing(buttonAnim, {
       toValue: 1,
@@ -123,31 +141,33 @@ const TouchableButton: React.FC<TouchableButtonProps> = ({ label, onPress, varia
   }, []);
 
   const isPrimary = variant === 'primary';
-  
+
   return (
     <Animated.View
       style={{
         opacity: buttonAnim,
-        transform: [{ 
-          translateY: buttonAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [20, 0]
-          })
-        }]
+        transform: [
+          {
+            translateY: buttonAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [20, 0],
+            }),
+          },
+        ],
       }}
     >
       <TouchableOpacity
         style={[
           styles.button,
-          isPrimary ? styles.primaryButton : styles.outlineButton
+          isPrimary ? styles.primaryButton : styles.outlineButton,
         ]}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Text 
+        <Text
           style={[
             styles.buttonText,
-            isPrimary ? styles.primaryButtonText : styles.outlineButtonText
+            isPrimary ? styles.primaryButtonText : styles.outlineButtonText,
           ]}
         >
           {label}
@@ -156,8 +176,6 @@ const TouchableButton: React.FC<TouchableButtonProps> = ({ label, onPress, varia
     </Animated.View>
   );
 };
-
-import { TouchableOpacity } from 'react-native-gesture-handler';
 
 const styles = StyleSheet.create({
   container: {
