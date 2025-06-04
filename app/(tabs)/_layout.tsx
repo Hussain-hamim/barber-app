@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { Chrome as Home, Calendar, User, Settings } from 'lucide-react-native';
 import { Colors, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { StatusBar } from 'expo-status-bar';
 
 export default function TabLayout() {
   const { user } = useAuth();
@@ -35,12 +36,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
-      
+
       <Tabs.Screen
         name="appointments"
         options={{
           title: 'Appointments',
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Calendar size={size} color={color} />
+          ),
         }}
       />
 
@@ -56,7 +59,9 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Settings size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

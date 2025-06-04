@@ -24,6 +24,7 @@ import { Heart, Search, Plus, Star } from 'lucide-react-native';
 import Button from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
+import { StatusBar } from 'expo-status-bar';
 
 const { height, width } = Dimensions.get('window');
 const CARD_HEIGHT = height * 0.48;
@@ -85,7 +86,7 @@ export default function HomeScreen() {
           .from('barbers')
           .select('*')
           .eq('is_active', true)
-          .order('name', { ascending: true });
+          .order('created_at', { ascending: false });
 
         if (error) throw error;
 
@@ -243,6 +244,8 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+
       <View style={styles.header}>
         <View>
           <Text style={styles.welcomeText}>
