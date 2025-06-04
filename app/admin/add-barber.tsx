@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -56,7 +57,7 @@ export default function AddBarberScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -122,8 +123,7 @@ export default function AddBarberScreen() {
           {
             name,
             experience,
-            image_url:
-              'https://images.unsplash.com/photo-1519699047748-de8e457a634e',
+            image_url: imageUri,
             about: about || null,
             rating: rating ? parseFloat(rating) : null,
             is_active: true,
