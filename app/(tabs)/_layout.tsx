@@ -48,8 +48,8 @@ export default function TabLayout() {
         tabBarStyle: {
           borderTopWidth: 1,
           borderTopColor: Colors.neutral[200],
-          height: 60,
-          paddingBottom: 6,
+          height: 77,
+          paddingBottom: 20,
           paddingTop: 6,
         },
         headerShown: false,
