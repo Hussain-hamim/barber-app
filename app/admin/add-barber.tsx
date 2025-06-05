@@ -90,7 +90,7 @@ export default function AddBarberScreen() {
 
         setImageUri(publicUrl);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Image upload error:', error);
       Alert.alert(
         'Upload Failed',
@@ -108,10 +108,10 @@ export default function AddBarberScreen() {
       return;
     }
 
-    // if (!imageUri) {
-    //   Alert.alert('Required', 'Please select a profile image');
-    //   return;
-    // }
+    if (!imageUri) {
+      Alert.alert('Required', 'Please select a profile image');
+      return;
+    }
 
     setLoading(true);
 
@@ -292,6 +292,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: Spacing.lg,
+    marginBottom: Spacing.xl,
   },
   imageUploadContainer: {
     marginBottom: Spacing.lg,

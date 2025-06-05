@@ -1,26 +1,38 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   SafeAreaView,
   Switch,
   ScrollView,
-  Alert 
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/theme';
-import { Bell, Globe, ShieldCheck, CircleHelp as HelpCircle, Info, ChevronRight, Trash } from 'lucide-react-native';
+import {
+  Colors,
+  Typography,
+  Spacing,
+  Radius,
+  Shadows,
+} from '@/constants/theme';
+import {
+  Bell,
+  Globe,
+  ShieldCheck,
+  CircleHelp as HelpCircle,
+  Info,
+  ChevronRight,
+  Trash,
+} from 'lucide-react-native';
 import { clearAllData } from '@/utils/storage';
 
 export default function SettingsScreen() {
-  const router = useRouter();
-  const { user, signOut } = useAuth();
-  
   const [notifications, setNotifications] = React.useState(true);
-  
+  const router = useRouter();
+  const user = { isAdmin: true };
+
   const handleClearData = async () => {
     Alert.alert(
       'Clear All Data',
@@ -46,14 +58,14 @@ export default function SettingsScreen() {
     );
   };
 
-  const SettingsItem = ({ 
-    icon, 
-    title, 
-    subtitle, 
-    onPress, 
-    showSwitch, 
-    switchValue, 
-    onSwitchValueChange 
+  const SettingsItem = ({
+    icon,
+    title,
+    subtitle,
+    onPress,
+    showSwitch,
+    switchValue,
+    onSwitchValueChange,
   }: {
     icon: React.ReactNode;
     title: string;
@@ -63,22 +75,20 @@ export default function SettingsScreen() {
     switchValue?: boolean;
     onSwitchValueChange?: (value: boolean) => void;
   }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.settingsItem}
       onPress={onPress}
       disabled={!onPress}
     >
-      <View style={styles.settingsItemIcon}>
-        {icon}
-      </View>
-      
+      <View style={styles.settingsItemIcon}>{icon}</View>
+
       <View style={styles.settingsItemContent}>
         <Text style={styles.settingsItemTitle}>{title}</Text>
         {subtitle && (
           <Text style={styles.settingsItemSubtitle}>{subtitle}</Text>
         )}
       </View>
-      
+
       {showSwitch ? (
         <Switch
           value={switchValue}
@@ -91,13 +101,17 @@ export default function SettingsScreen() {
       )}
     </TouchableOpacity>
   );
-  
-  const SettingsSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+
+  const SettingsSection = ({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) => (
     <View style={styles.settingsSection}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionContent}>
-        {children}
-      </View>
+      <View style={styles.sectionContent}>{children}</View>
     </View>
   );
 
@@ -106,26 +120,31 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
-      
+
       <ScrollView style={styles.content}>
         <SettingsSection title="Account">
           <SettingsItem
             icon={<ShieldCheck size={22} color={Colors.primary[600]} />}
             title="Privacy Settings"
             subtitle="Manage your data and privacy"
-            onPress={() => {/* Navigate to privacy settings */}}
+            onPress={() => {
+              /* Navigate to privacy settings */
+              // router.push('/admin/services');
+            }}
           />
-          
+
           {user?.isAdmin && (
             <SettingsItem
               icon={<Globe size={22} color={Colors.primary[600]} />}
               title="Admin Dashboard"
               subtitle="Manage your barber shop"
-              onPress={() => {/* Navigate to admin dashboard */}}
+              onPress={() => {
+                /* Navigate to admin dashboard */
+              }}
             />
           )}
         </SettingsSection>
-        
+
         <SettingsSection title="Notifications">
           <SettingsItem
             icon={<Bell size={22} color={Colors.primary[600]} />}
@@ -136,23 +155,27 @@ export default function SettingsScreen() {
             onSwitchValueChange={setNotifications}
           />
         </SettingsSection>
-        
+
         <SettingsSection title="Support">
           <SettingsItem
             icon={<HelpCircle size={22} color={Colors.primary[600]} />}
             title="Help Center"
             subtitle="Get help with your account"
-            onPress={() => {/* Navigate to help center */}}
+            onPress={() => {
+              /* Navigate to help center */
+            }}
           />
-          
+
           <SettingsItem
             icon={<Info size={22} color={Colors.primary[600]} />}
             title="About Us"
             subtitle="Learn more about HimalByte"
-            onPress={() => {/* Navigate to about us */}}
+            onPress={() => {
+              /* Navigate to about us */
+            }}
           />
         </SettingsSection>
-        
+
         <SettingsSection title="Data">
           <SettingsItem
             icon={<Trash size={22} color={Colors.error[600]} />}

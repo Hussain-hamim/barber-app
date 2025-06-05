@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import { supabase } from '@/lib/supabase';
 
 export default function LandingScreen() {
   const router = useRouter();

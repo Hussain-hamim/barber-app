@@ -27,7 +27,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false); // Add admin toggle
   const [errors, setErrors] = useState({
     name: '',
     email: '',
@@ -93,12 +92,7 @@ export default function RegisterScreen() {
           {
             text: 'OK',
             onPress: () => {
-              // Navigate to appropriate screen based on admin status
-              if (isAdmin) {
-                router.replace('/(admin)');
-              } else {
-                router.replace('/(tabs)');
-              }
+              router.replace('/(tabs)');
             },
           },
         ]

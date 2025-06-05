@@ -31,7 +31,6 @@ import { useAuth } from '@/context/AuthContext';
 export default function BookingScreen() {
   const router = useRouter();
   const { session } = useAuth();
-  console.log(session);
 
   const {
     barberId,
@@ -67,14 +66,6 @@ export default function BookingScreen() {
       return;
     }
 
-    // if (!session?.user) {
-    //   Alert.alert(
-    //     'Authentication Required',
-    //     'Please sign in to book an appointment'
-    //   );
-    //   return;
-    // }
-
     setLoading(true);
 
     try {
@@ -89,7 +80,7 @@ export default function BookingScreen() {
         .from('appointments')
         .insert([
           {
-            profile_id: session.user.id,
+            profile_id: session?.user.id,
             barber_id: barberId,
             service_id: serviceId,
             appointment_date: selectedDate,
