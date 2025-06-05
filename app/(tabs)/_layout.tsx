@@ -1,13 +1,39 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Chrome as Home, Calendar, User, Settings } from 'lucide-react-native';
 import { Colors, Typography } from '@/constants/theme';
-import { useAuth } from '@/context/AuthContext';
-import { StatusBar } from 'expo-status-bar';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
 
 export default function TabLayout() {
-  const { user } = useAuth();
-  const isAdmin = user?.isAdmin;
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+
+  const isAdmin = profile?.is_admin;
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setSession(session);
+      console.log('Session new:', session);
+
+      if (session) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(data || null);
+      }
+    };
+    fetchUser();
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+  }, []);
 
   return (
     <Tabs

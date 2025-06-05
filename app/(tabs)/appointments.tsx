@@ -22,19 +22,35 @@ import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import Button from '@/components/Button';
 
+interface Barber {
+  id: string;
+  name: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+}
+
+type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+
 interface Appointment {
   id: string;
   profile_id: string;
   barber_id: string;
   service_id: string;
-  appointment_date: string;
-  appointment_time: string;
-  status: string;
+  appointment_date: string; // ISO date string
+  appointment_time: string; // ISO time string
+  status: AppointmentStatus;
   created_at: string;
-  barbers?: { name: string };
-  services?: { name: string };
-  user_id?: string; // Added for mapping
-  formatted_date?: string; // Added for formatted date
+  updated_at?: string;
+  barbers?: Barber;
+  services?: Service;
+  // These are added for convenience in the UI
+  barber_name?: string;
+  service_name?: string;
+  formatted_date?: string;
+  formatted_time?: string;
 }
 
 export default function AppointmentsScreen() {
@@ -121,7 +137,7 @@ export default function AppointmentsScreen() {
 
       // Format the dates and add to appointments
       const formattedAppointments =
-        data?.map((appointment) => ({
+        data?.map((appointment: any) => ({
           ...appointment,
           user_id: appointment.profile_id,
           barber_name: appointment.barbers?.name,
@@ -162,7 +178,7 @@ export default function AppointmentsScreen() {
       if (error) throw error;
 
       // Refresh the appointments list
-      await loadAppointments();
+      await loadAppointments(session, isAdmin);
     } catch (error) {
       console.error('Error updating appointment:', error);
       Alert.alert('Error', 'Failed to update appointment');
@@ -298,7 +314,9 @@ export default function AppointmentsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
             refreshing={loading}
-            onRefresh={loadAppointments}
+            onRefresh={() => {
+              loadAppointments(session, isAdmin);
+            }}
           />
         )}
       </View>

@@ -1,18 +1,18 @@
 import React from 'react';
-import { 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
-  ActivityIndicator, 
-  StyleProp, 
-  ViewStyle, 
-  TextStyle 
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
 import { Colors, Typography, Radius } from '@/constants/theme';
 
 type ButtonProps = {
   title: string;
-  onPress: () => void;
+  onPress: (e: any) => void;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
@@ -130,9 +130,13 @@ const Button: React.FC<ButtonProps> = ({
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator 
-          size="small" 
-          color={variant === 'outline' || variant === 'ghost' ? Colors.primary[600] : Colors.white} 
+        <ActivityIndicator
+          size="small"
+          color={
+            variant === 'outline' || variant === 'ghost'
+              ? Colors.primary[600]
+              : Colors.white
+          }
         />
       ) : (
         <>

@@ -9,9 +9,9 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
 import {
   Colors,
   Typography,
@@ -80,7 +80,7 @@ export default function HomeScreen() {
       try {
         // Load favorites from storage
         const storedFavorites = await getFavorites();
-        setFavorites(storedFavorites);
+        // setFavorites(storedFavorites);
 
         // Fetch barbers from Supabase
         const { data: barbersData, error } = await supabase
@@ -113,7 +113,7 @@ export default function HomeScreen() {
 
   const handleToggleFavorite = async (barberId: string) => {
     try {
-      const newFavoriteState = await toggleBarberFavorite(barberId);
+      const newFavoriteState = await toggleBarberFavorite(parseInt(barberId));
 
       setBarbers(
         barbers.map((barber) =>
@@ -191,9 +191,7 @@ export default function HomeScreen() {
               color={Colors.warning[500]}
               fill={Colors.warning[500]}
             />
-            <Text style={styles.ratingText}>
-              {item.rating?.toFixed(1) || 'N/A'}
-            </Text>
+            <Text>{item.rating?.toFixed(1) || 'N/A'}</Text>
           </View>
         </View>
 
@@ -205,7 +203,7 @@ export default function HomeScreen() {
           <View style={styles.adminButtons}>
             <Button
               title="Edit"
-              onPress={(e) => {
+              onPress={(e: any) => {
                 e.stopPropagation();
                 router.push({
                   pathname: '/admin/edit-barber',
