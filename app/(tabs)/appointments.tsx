@@ -24,17 +24,17 @@ import Button from '@/components/Button';
 
 interface Appointment {
   id: string;
-  user_id: string;
+  profile_id: string;
   barber_id: string;
   service_id: string;
   appointment_date: string;
   appointment_time: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  notes: string | null;
+  status: string;
   created_at: string;
-  barber_name?: string;
-  service_name?: string;
-  formatted_date?: string;
+  barbers?: { name: string };
+  services?: { name: string };
+  user_id?: string; // Added for mapping
+  formatted_date?: string; // Added for formatted date
 }
 
 export default function AppointmentsScreen() {
@@ -89,6 +89,12 @@ export default function AppointmentsScreen() {
     try {
       setLoading(true);
 
+      // Ensure we have a session before proceeding
+      if (!session) {
+        setAppointments([]);
+        return;
+      }
+
       let query = supabase.from('appointments').select(`
       id,
       profile_id,
@@ -102,17 +108,15 @@ export default function AppointmentsScreen() {
       services (name)
     `);
 
-      // Admins see all appointments, users see only their own
-      if (!isAdmin && session) {
+      // Only filter by user_id if not admin
+      if (!isAdmin) {
         query = query.eq('profile_id', session.user.id);
       }
 
       // Order by date (newest first)
-      query = query
+      const { data, error } = await query
         .order('appointment_date', { ascending: false })
         .order('appointment_time', { ascending: true });
-
-      const { data, error } = await query;
 
       if (error) throw error;
 

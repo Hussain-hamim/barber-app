@@ -19,8 +19,6 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { getAppointments } from '@/utils/storage';
-import { getFavorites } from '@/utils/storage';
 import {
   ChevronRight,
   User as UserIcon,
@@ -86,11 +84,22 @@ export default function ProfileScreen() {
             .from('barbers')
             .select('*');
 
+          const { data: allAppointments, error: appointmentError } =
+            await supabase
+              .from('appointments')
+              .select('*')
+              .eq('profile_id', session.user.id);
+
+          const upcoming = (allAppointments ?? [])
+            .filter(
+              (appt) => appt.status === 'confirmed' || appt.status === 'pending'
+            )
+            .slice(0, 3); // Just show the next 3
+
+          setUpcomingAppointments(upcoming);
+
           if (barbersError) throw barbersError;
           setAllBarbers(barbers || []);
-
-          // Load user data (appointments and favorites)
-          await loadUserData(barbers || []);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -113,32 +122,11 @@ export default function ProfileScreen() {
     };
   }, []);
 
-  const loadUserData = async (barbers: Barber[]) => {
-    try {
-      // Load upcoming appointments
-      const allAppointments = await getAppointments();
-      const upcoming = allAppointments
-        .filter(
-          (appt) => appt.status === 'confirmed' || appt.status === 'pending'
-        )
-        .slice(0, 3); // Just show the next 3
-
-      setUpcomingAppointments(upcoming);
-
-      // Load favorite barbers
-      const favIds = await getFavorites();
-      const favBarbers = barbers.filter((barber) => favIds.includes(barber.id));
-      setFavoriteBarbers(favBarbers);
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
-  };
-
   const handleLogout = async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      router.replace('/(auth)/landing');
+      router.replace('/auth/login');
     } catch (error) {
       console.error('Error during logout:', error);
     }
