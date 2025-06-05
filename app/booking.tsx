@@ -1,79 +1,118 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView, 
-  Alert 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/theme';
+import {
+  Colors,
+  Typography,
+  Spacing,
+  Radius,
+  Shadows,
+} from '@/constants/theme';
 import { TIME_SLOTS } from '@/constants/data';
-import { saveAppointment } from '@/utils/storage';
-import { ArrowLeft, Calendar as CalendarIcon, Clock, Check } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Calendar as CalendarIcon,
+  Clock,
+  Check,
+} from 'lucide-react-native';
 import Button from '@/components/Button';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BookingScreen() {
   const router = useRouter();
-  const { 
-    barberId, 
-    barberName, 
-    serviceId, 
-    serviceName, 
-    servicePrice, 
-    serviceDuration 
+  const { session } = useAuth();
+  console.log(session);
+
+  const {
+    barberId,
+    barberName,
+    serviceId,
+    serviceName,
+    servicePrice,
+    serviceDuration,
   } = useLocalSearchParams();
-  
+
   const today = new Date();
   const formattedToday = today.toISOString().split('T')[0];
-  
+
   const [selectedDate, setSelectedDate] = useState<string>(formattedToday);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
+
   const handleDateSelect = (day: any) => {
     setSelectedDate(day.dateString);
     setSelectedTime(null); // Reset time selection when date changes
   };
-  
+
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
   };
-  
+
   const handleBookNow = async () => {
     if (!selectedDate || !selectedTime) {
-      Alert.alert('Required', 'Please select both date and time for your appointment');
+      Alert.alert(
+        'Required',
+        'Please select both date and time for your appointment'
+      );
       return;
     }
-    
+
+    // if (!session?.user) {
+    //   Alert.alert(
+    //     'Authentication Required',
+    //     'Please sign in to book an appointment'
+    //   );
+    //   return;
+    // }
+
     setLoading(true);
-    
+
     try {
-      const newAppointment = {
-        id: Math.random().toString(36).substring(2, 9),
-        barberId: Number(barberId),
-        serviceId: Number(serviceId),
-        date: selectedDate,
-        time: selectedTime,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-      
-      await saveAppointment(newAppointment);
-      
-      // Navigate to success screen
-      router.push({
-        pathname: '/booking-success',
-        params: {
-          barberName: barberName as string,
-          serviceName: serviceName as string,
-          date: selectedDate,
-          time: selectedTime,
-        }
-      });
+      // Convert the time string to a proper time format (e.g., "09:00:00")
+      const timeParts = selectedTime.split(' ');
+      const timeValue =
+        timeParts[0].length === 4
+          ? `0${timeParts[0]}:00`
+          : `${timeParts[0]}:00`;
+
+      const { data, error } = await supabase
+        .from('appointments')
+        .insert([
+          {
+            profile_id: session.user.id,
+            barber_id: barberId,
+            service_id: serviceId,
+            appointment_date: selectedDate,
+            appointment_time: timeValue,
+            status: 'pending',
+          },
+        ])
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        // Navigate to success screen
+        router.push({
+          pathname: '/booking-success',
+          params: {
+            barberName: barberName as string,
+            serviceName: serviceName as string,
+            date: selectedDate,
+            time: selectedTime,
+          },
+        });
+      }
     } catch (error) {
       console.error('Error booking appointment:', error);
       Alert.alert('Error', 'Failed to book appointment. Please try again.');
@@ -81,74 +120,82 @@ export default function BookingScreen() {
       setLoading(false);
     }
   };
-  
+
   // Calculate the next 30 days for the calendar
   const getMarkedDates = () => {
     const markedDates: any = {};
-    
+
     // Mark the selected date
     markedDates[selectedDate] = {
       selected: true,
       selectedColor: Colors.primary[600],
     };
-    
+
     return markedDates;
   };
-  
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Book Appointment</Text>
         </View>
-        
+
         <View style={styles.placeholder} />
       </View>
-      
+
       <ScrollView style={styles.content}>
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>Appointment Summary</Text>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Barber</Text>
             <Text style={styles.summaryValue}>{barberName}</Text>
           </View>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Service</Text>
             <Text style={styles.summaryValue}>{serviceName}</Text>
           </View>
-          
+
           <View style={styles.summaryRow}>
             <View style={styles.summaryDetail}>
               <Text style={styles.detailLabel}>Price</Text>
-              <Text style={styles.detailValue}>{servicePrice}</Text>
+              <Text style={styles.detailValue}>${servicePrice}</Text>
             </View>
-            
+
             <View style={styles.summaryDetail}>
               <Text style={styles.detailLabel}>Duration</Text>
               <Text style={styles.detailValue}>{serviceDuration}</Text>
             </View>
           </View>
         </View>
-        
+
         <View style={styles.calendarContainer}>
           <View style={styles.calendarHeader}>
             <CalendarIcon size={20} color={Colors.primary[600]} />
             <Text style={styles.calendarTitle}>Select Date</Text>
           </View>
-          
+
           <Calendar
             current={selectedDate}
             minDate={formattedToday}
-            maxDate={new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()).toISOString().split('T')[0]}
+            maxDate={
+              new Date(
+                today.getFullYear(),
+                today.getMonth() + 3,
+                today.getDate()
+              )
+                .toISOString()
+                .split('T')[0]
+            }
             onDayPress={handleDateSelect}
             markedDates={getMarkedDates()}
             theme={{
@@ -174,27 +221,27 @@ export default function BookingScreen() {
             style={styles.calendar}
           />
         </View>
-        
+
         <View style={styles.timeContainer}>
           <View style={styles.timeHeader}>
             <Clock size={20} color={Colors.primary[600]} />
             <Text style={styles.timeTitle}>Select Time</Text>
           </View>
-          
+
           <View style={styles.timeSlotGrid}>
-            {TIME_SLOTS.map(time => (
+            {TIME_SLOTS.map((time) => (
               <TouchableOpacity
                 key={time}
                 style={[
                   styles.timeSlot,
-                  selectedTime === time && styles.timeSlotSelected
+                  selectedTime === time && styles.timeSlotSelected,
                 ]}
                 onPress={() => handleTimeSelect(time)}
               >
-                <Text 
+                <Text
                   style={[
                     styles.timeSlotText,
-                    selectedTime === time && styles.timeSlotTextSelected
+                    selectedTime === time && styles.timeSlotTextSelected,
                   ]}
                 >
                   {time}
@@ -209,7 +256,7 @@ export default function BookingScreen() {
           </View>
         </View>
       </ScrollView>
-      
+
       <View style={styles.footer}>
         <Button
           title="Book Now"
@@ -223,6 +270,7 @@ export default function BookingScreen() {
   );
 }
 
+// Keep your existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,

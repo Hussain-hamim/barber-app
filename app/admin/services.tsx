@@ -1,48 +1,101 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  TextInput,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
   FlatList,
   Alert,
   Modal,
-  ScrollView
+  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/theme';
-import { SERVICES, Service, BARBERS } from '@/constants/data';
-import { ArrowLeft, CreditCard as Edit2, Trash2, Plus, X, DollarSign, Clock } from 'lucide-react-native';
+import {
+  Colors,
+  Typography,
+  Spacing,
+  Radius,
+  Shadows,
+} from '@/constants/theme';
+import {
+  ArrowLeft,
+  Edit2,
+  Trash2,
+  Plus,
+  X,
+  DollarSign,
+  Clock,
+} from 'lucide-react-native';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
+import { supabase } from '@/lib/supabase';
+
+interface Service {
+  id: string;
+  barber_id: string;
+  name: string;
+  price: number;
+  duration: string; // Changed from interval to string for display
+  description: string | null;
+  is_active: boolean;
+}
 
 export default function AdminServicesScreen() {
   const router = useRouter();
   const { barberId } = useLocalSearchParams();
-  
+
   const [services, setServices] = useState<Service[]>([]);
-  const [barber, setBarber] = useState(BARBERS.find(b => b.id === Number(barberId)));
+  const [barber, setBarber] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentService, setCurrentService] = useState<Service | null>(null);
-  
+  const [loading, setLoading] = useState(true);
+
   // Form state
   const [serviceName, setServiceName] = useState('');
   const [servicePrice, setServicePrice] = useState('');
   const [serviceDuration, setServiceDuration] = useState('');
   const [serviceDescription, setServiceDescription] = useState('');
-  
+
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch barber details
+        const { data: barberData } = await supabase
+          .from('barbers')
+          .select('*')
+          .eq('id', barberId)
+          .single();
+
+        setBarber(barberData);
+
+        // Fetch services for this barber
+        const { data: servicesData, error } = await supabase
+          .from('services')
+          .select('*')
+          .eq('barber_id', barberId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        setServices(servicesData || []);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        Alert.alert('Error', 'Failed to load services');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (barberId) {
-      // Filter services by barber ID
-      const barberServices = SERVICES.filter(
-        service => service.barberId === Number(barberId)
-      );
-      setServices(barberServices);
+      fetchData();
     }
   }, [barberId]);
-  
+
   const openAddModal = () => {
     setCurrentService(null);
     setServiceName('');
@@ -51,55 +104,109 @@ export default function AdminServicesScreen() {
     setServiceDescription('');
     setModalVisible(true);
   };
-  
+
   const openEditModal = (service: Service) => {
     setCurrentService(service);
     setServiceName(service.name);
-    setServicePrice(service.price);
-    setServiceDuration(service.duration);
+    setServicePrice(service.price.toString());
+    setServiceDuration(formatDuration(service.duration));
     setServiceDescription(service.description || '');
     setModalVisible(true);
   };
-  
-  const handleSaveService = () => {
+
+  // Convert duration string to display format
+  const formatDuration = (duration: string) => {
+    if (!duration) return '';
+    // Parse ISO 8601 duration format (e.g., PT30M)
+    const matches = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+    if (!matches) return duration;
+
+    const hours = matches[1]
+      ? `${matches[1]} hour${matches[1] === '1' ? '' : 's'}`
+      : '';
+    const minutes = matches[2]
+      ? `${matches[2]} minute${matches[2] === '1' ? '' : 's'}`
+      : '';
+
+    return `${hours} ${minutes}`.trim();
+  };
+
+  // Convert display format to ISO duration
+  const parseDuration = (displayDuration: string) => {
+    if (!displayDuration) return 'PT0M';
+
+    const parts = displayDuration.split(' ');
+    let hours = 0;
+    let minutes = 0;
+
+    parts.forEach((part) => {
+      if (part.includes('hour')) {
+        hours = parseInt(part);
+      } else if (part.includes('minute')) {
+        minutes = parseInt(part);
+      }
+    });
+
+    return `PT${hours > 0 ? `${hours}H` : ''}${
+      minutes > 0 ? `${minutes}M` : '0M'
+    }`;
+  };
+
+  const handleSaveService = async () => {
     // Validate form
     if (!serviceName || !servicePrice || !serviceDuration) {
       Alert.alert('Required Fields', 'Please fill in all required fields');
       return;
     }
-    
-    if (currentService) {
-      // Update existing service
-      const updatedServices = services.map(service => 
-        service.id === currentService.id 
-          ? { 
-              ...service, 
-              name: serviceName,
-              price: servicePrice,
-              duration: serviceDuration,
-              description: serviceDescription 
-            } 
-          : service
-      );
-      setServices(updatedServices);
-    } else {
-      // Add new service
-      const newService: Service = {
-        id: Math.max(...services.map(s => s.id), 0) + 1,
-        barberId: Number(barberId),
+
+    try {
+      setLoading(true);
+
+      const serviceData = {
+        barber_id: barberId as string,
         name: serviceName,
-        price: servicePrice,
-        duration: serviceDuration,
-        description: serviceDescription,
+        price: parseFloat(servicePrice),
+        duration: parseDuration(serviceDuration),
+        description: serviceDescription || null,
+        is_active: true,
       };
-      
-      setServices([...services, newService]);
+
+      if (currentService) {
+        // Update existing service
+        const { error } = await supabase
+          .from('services')
+          .update(serviceData)
+          .eq('id', currentService.id);
+
+        if (error) throw error;
+
+        // Update local state
+        setServices(
+          services.map((s) =>
+            s.id === currentService.id ? { ...s, ...serviceData } : s
+          )
+        );
+      } else {
+        // Add new service
+        const { data, error } = await supabase
+          .from('services')
+          .insert(serviceData)
+          .select();
+
+        if (error) throw error;
+        if (data) setServices([data[0], ...services]);
+      }
+
+      setModalVisible(false);
+    } catch (error) {
+      console.error('Error saving service:', error);
+      Alert.alert('Error', 'Failed to save service');
+    } finally {
+      setLoading(false);
     }
-    
-    setModalVisible(false);
   };
-  
-  const handleDeleteService = (id: number) => {
+
+  const handleDeleteService = async (id: string) => {
     Alert.alert(
       'Delete Service',
       'Are you sure you want to delete this service?',
@@ -111,15 +218,31 @@ export default function AdminServicesScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            const filteredServices = services.filter(service => service.id !== id);
-            setServices(filteredServices);
+          onPress: async () => {
+            try {
+              setLoading(true);
+              // Soft delete by setting is_active to false
+              const { error } = await supabase
+                .from('services')
+                .update({ is_active: false })
+                .eq('id', id);
+
+              if (error) throw error;
+
+              // Update local state
+              setServices(services.filter((service) => service.id !== id));
+            } catch (error) {
+              console.error('Error deleting service:', error);
+              Alert.alert('Error', 'Failed to delete service');
+            } finally {
+              setLoading(false);
+            }
           },
         },
       ]
     );
   };
-  
+
   const renderServiceItem = ({ item }: { item: Service }) => (
     <View style={styles.serviceCard}>
       <View style={styles.serviceInfo}>
@@ -127,29 +250,31 @@ export default function AdminServicesScreen() {
         {item.description && (
           <Text style={styles.serviceDescription}>{item.description}</Text>
         )}
-        
+
         <View style={styles.serviceDetails}>
           <View style={styles.serviceDetail}>
             <DollarSign size={16} color={Colors.neutral[600]} />
-            <Text style={styles.detailText}>{item.price}</Text>
+            <Text style={styles.detailText}>${item.price.toFixed(2)}</Text>
           </View>
-          
+
           <View style={styles.serviceDetail}>
             <Clock size={16} color={Colors.neutral[600]} />
-            <Text style={styles.detailText}>{item.duration}</Text>
+            <Text style={styles.detailText}>
+              {formatDuration(item.duration)}
+            </Text>
           </View>
         </View>
       </View>
-      
+
       <View style={styles.actionButtons}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, styles.editButton]}
           onPress={() => openEditModal(item)}
         >
           <Edit2 size={16} color={Colors.primary[600]} />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={[styles.actionButton, styles.deleteButton]}
           onPress={() => handleDeleteService(item.id)}
         >
@@ -159,24 +284,34 @@ export default function AdminServicesScreen() {
     </View>
   );
 
+  if (loading && services.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary[600]} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Manage Services</Text>
           {barber && <Text style={styles.headerSubtitle}>{barber.name}</Text>}
         </View>
-        
+
         <View style={styles.placeholder} />
       </View>
-      
+
       <View style={styles.content}>
         <Button
           title="Add New Service"
@@ -184,68 +319,65 @@ export default function AdminServicesScreen() {
           leftIcon={<Plus size={18} color={Colors.white} />}
           style={styles.addButton}
         />
-        
+
         {services.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              No services available. Add your first service using the button above.
+              No services available. Add your first service using the button
+              above.
             </Text>
           </View>
         ) : (
           <FlatList
             data={services}
             renderItem={renderServiceItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
           />
         )}
       </View>
-      
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-      >
+
+      <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {currentService ? 'Edit Service' : 'Add New Service'}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
                 <X size={24} color={Colors.neutral[600]} />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.formContainer}>
               <Input
-                label="Service Name"
+                label="Service Name *"
                 placeholder="Haircut"
                 value={serviceName}
                 onChangeText={setServiceName}
               />
-              
+
               <Input
-                label="Price"
-                placeholder="$10"
+                label="Price *"
+                placeholder="10.00"
                 value={servicePrice}
                 onChangeText={setServicePrice}
                 keyboardType="decimal-pad"
                 leftIcon={<DollarSign size={20} color={Colors.neutral[500]} />}
               />
-              
+
               <Input
-                label="Duration"
+                label="Duration *"
                 placeholder="30 minutes"
                 value={serviceDuration}
                 onChangeText={setServiceDuration}
                 leftIcon={<Clock size={20} color={Colors.neutral[500]} />}
               />
-              
+
               <Input
                 label="Description (Optional)"
                 placeholder="Describe the service..."
@@ -255,11 +387,12 @@ export default function AdminServicesScreen() {
                 numberOfLines={3}
                 style={styles.textArea}
               />
-              
+
               <Button
-                title="Save Service"
+                title={currentService ? 'Update Service' : 'Add Service'}
                 onPress={handleSaveService}
                 style={styles.saveButton}
+                loading={loading}
               />
             </ScrollView>
           </View>
@@ -273,6 +406,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',

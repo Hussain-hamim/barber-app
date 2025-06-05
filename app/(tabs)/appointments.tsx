@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -16,22 +17,32 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { getAppointments, updateAppointment } from '@/utils/storage';
-import { BARBERS, SERVICES, Appointment } from '@/constants/data';
-import { Calendar, Clock, User, MapPin, X } from 'lucide-react-native';
-import { useAuth } from '@/context/AuthContext';
+import { Calendar, Clock, User, X } from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
+import Button from '@/components/Button';
 
-type AppointmentWithDetails = Appointment & {
-  barberName: string;
-  serviceName: string;
-  formattedDate: string;
-};
+interface Appointment {
+  id: string;
+  user_id: string;
+  barber_id: string;
+  service_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  notes: string | null;
+  created_at: string;
+  barber_name?: string;
+  service_name?: string;
+  formatted_date?: string;
+}
 
 export default function AppointmentsScreen() {
   const router = useRouter();
-
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const isAdmin = profile?.is_admin;
 
@@ -42,64 +53,90 @@ export default function AppointmentsScreen() {
       } = await supabase.auth.getSession();
       setSession(session);
 
-      // fetch profile
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session?.user.id)
-        .single();
-
-      setProfile(data || null);
+      if (session) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(data || null);
+      }
     };
+
     fetchUser();
 
     supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session); // for real-time session change update
+      setSession(session);
     });
   }, []);
 
-  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>(
-    []
-  );
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
+    // if (session) {
     loadAppointments();
+    // }
   }, []);
 
+  // Update the useEffect that loads appointments
+  useEffect(() => {
+    if (session) {
+      // Only load appointments if session exists
+      loadAppointments();
+    }
+  }, [session]); // Add session as dependency
+
+  // Update the loadAppointments function
   const loadAppointments = async () => {
     try {
-      const storedAppointments = await getAppointments();
+      setLoading(true);
 
-      // Add barber and service names to appointments
-      const enhancedAppointments = storedAppointments.map((appointment) => {
-        const barber = BARBERS.find((b) => b.id === appointment.barberId);
-        const service = SERVICES.find((s) => s.id === appointment.serviceId);
+      let query = supabase.from('appointments').select(`
+      id,
+      profile_id,
+      barber_id,
+      service_id,
+      appointment_date,
+      appointment_time,
+      status,
+      created_at,
+      barbers (name),
+      services (name)
+    `);
 
-        const formattedDate = formatDate(appointment.date);
+      // Admins see all appointments, users see only their own
+      if (!isAdmin && session) {
+        query = query.eq('profile_id', session.user.id);
+      }
 
-        return {
+      // Order by date (newest first)
+      query = query
+        .order('appointment_date', { ascending: false })
+        .order('appointment_time', { ascending: true });
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Format the dates and add to appointments
+      const formattedAppointments =
+        data?.map((appointment) => ({
           ...appointment,
-          barberName: barber?.name || 'Unknown Barber',
-          serviceName: service?.name || 'Unknown Service',
-          formattedDate,
-        };
-      });
+          user_id: appointment.profile_id, // Map profile_id to user_id
+          barber_name: appointment.barbers?.name,
+          service_name: appointment.services?.name,
+          formatted_date: formatDate(appointment.appointment_date),
+        })) || [];
 
-      setAppointments(enhancedAppointments);
+      setAppointments(formattedAppointments);
     } catch (error) {
       console.error('Error loading appointments:', error);
+      Alert.alert('Error', 'Failed to load appointments');
     } finally {
       setLoading(false);
     }
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-
-    const [year, month, day] = dateString.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
+    const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
@@ -107,16 +144,27 @@ export default function AppointmentsScreen() {
     });
   };
 
-  const handleCancelAppointment = async (appointmentId: string) => {
+  const handleUpdateStatus = async (
+    appointmentId: string,
+    newStatus: string
+  ) => {
     try {
-      await updateAppointment(appointmentId, { status: 'cancelled' });
-      setAppointments(
-        appointments.map((appt) =>
-          appt.id === appointmentId ? { ...appt, status: 'cancelled' } : appt
-        )
-      );
+      setLoading(true);
+
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: newStatus })
+        .eq('id', appointmentId);
+
+      if (error) throw error;
+
+      // Refresh the appointments list
+      await loadAppointments();
     } catch (error) {
-      console.error('Error cancelling appointment:', error);
+      console.error('Error updating appointment:', error);
+      Alert.alert('Error', 'Failed to update appointment');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -135,11 +183,7 @@ export default function AppointmentsScreen() {
     }
   };
 
-  const renderAppointmentItem = ({
-    item,
-  }: {
-    item: AppointmentWithDetails;
-  }) => (
+  const renderAppointmentItem = ({ item }: { item: Appointment }) => (
     <View style={styles.appointmentCard}>
       <View style={styles.cardHeader}>
         <View
@@ -156,7 +200,7 @@ export default function AppointmentsScreen() {
         {item.status === 'pending' && !isAdmin && (
           <TouchableOpacity
             style={styles.cancelButton}
-            onPress={() => handleCancelAppointment(item.id)}
+            onPress={() => handleUpdateStatus(item.id, 'cancelled')}
           >
             <X size={16} color={Colors.neutral[600]} />
           </TouchableOpacity>
@@ -170,11 +214,7 @@ export default function AppointmentsScreen() {
                   styles.adminActionButton,
                   { backgroundColor: Colors.success[500] },
                 ]}
-                onPress={() =>
-                  updateAppointment(item.id, { status: 'confirmed' }).then(
-                    loadAppointments
-                  )
-                }
+                onPress={() => handleUpdateStatus(item.id, 'confirmed')}
               >
                 <Text style={styles.adminActionText}>Confirm</Text>
               </TouchableOpacity>
@@ -185,11 +225,7 @@ export default function AppointmentsScreen() {
                   styles.adminActionButton,
                   { backgroundColor: Colors.error[500] },
                 ]}
-                onPress={() =>
-                  updateAppointment(item.id, { status: 'cancelled' }).then(
-                    loadAppointments
-                  )
-                }
+                onPress={() => handleUpdateStatus(item.id, 'cancelled')}
               >
                 <Text style={styles.adminActionText}>Cancel</Text>
               </TouchableOpacity>
@@ -199,21 +235,21 @@ export default function AppointmentsScreen() {
       </View>
 
       <View style={styles.appointmentInfo}>
-        <Text style={styles.appointmentService}>{item.serviceName}</Text>
+        <Text style={styles.appointmentService}>{item.service_name}</Text>
 
         <View style={styles.infoItem}>
           <User size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.barberName}</Text>
+          <Text style={styles.infoText}>{item.barber_name}</Text>
         </View>
 
         <View style={styles.infoItem}>
           <Calendar size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.formattedDate}</Text>
+          <Text style={styles.infoText}>{item.formatted_date}</Text>
         </View>
 
         <View style={styles.infoItem}>
           <Clock size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.time}</Text>
+          <Text style={styles.infoText}>{item.appointment_time}</Text>
         </View>
       </View>
     </View>
@@ -258,16 +294,14 @@ export default function AppointmentsScreen() {
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
+            refreshing={loading}
+            onRefresh={loadAppointments}
           />
         )}
       </View>
     </SafeAreaView>
   );
 }
-
-import Button from '@/components/Button';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
 
 const styles = StyleSheet.create({
   container: {
@@ -380,5 +414,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.md,
     color: Colors.neutral[700],
     marginLeft: Spacing.sm,
+  },
+  notesText: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+    fontStyle: 'italic',
   },
 });

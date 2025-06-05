@@ -9,29 +9,58 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SERVICES, Service } from '@/constants/data';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/theme';
+import {
+  Colors,
+  Typography,
+  Spacing,
+  Radius,
+  Shadows,
+} from '@/constants/theme';
 import { ArrowLeft, Clock, DollarSign } from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
+
+interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: string;
+  description: string | null;
+}
 
 export default function ServicesScreen() {
   const router = useRouter();
   const { barberId, barberName } = useLocalSearchParams();
-  
+
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!barberId) {
-      return;
-    }
-    
-    // Filter services by barber ID
-    const filteredServices = SERVICES.filter(
-      service => service.barberId === Number(barberId)
-    );
-    
-    setServices(filteredServices);
-    setLoading(false);
+    const fetchServices = async () => {
+      if (!barberId) return;
+
+      try {
+        setLoading(true);
+
+        // Fetch active services for this barber from Supabase
+        const { data, error } = await supabase
+          .from('services')
+          .select('id, name, price, duration, description')
+          .eq('barber_id', barberId)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        setServices(data || []);
+      } catch (error) {
+        console.error('Error fetching services:', error);
+        Alert.alert('Error', 'Failed to load services');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServices();
   }, [barberId]);
 
   const handleSelectService = (service: Service) => {
@@ -40,12 +69,30 @@ export default function ServicesScreen() {
       params: {
         barberId: barberId as string,
         barberName: barberName as string,
-        serviceId: service.id.toString(),
+        serviceId: service.id,
         serviceName: service.name,
-        servicePrice: service.price,
-        serviceDuration: service.duration,
+        servicePrice: service.price.toString(),
+        serviceDuration: formatDuration(service.duration),
       },
     });
+  };
+
+  // Format ISO duration (PT30M) to readable format (30 minutes)
+  const formatDuration = (duration: string) => {
+    if (!duration) return '';
+
+    // Parse ISO 8601 duration format (e.g., PT30M)
+    const matches = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
+    if (!matches) return duration;
+
+    const hours = matches[1]
+      ? `${matches[1]} hour${matches[1] === '1' ? '' : 's'}`
+      : '';
+    const minutes = matches[2]
+      ? `${matches[2]} minute${matches[2] === '1' ? '' : 's'}`
+      : '';
+
+    return `${hours} ${minutes}`.trim();
   };
 
   const renderServiceItem = ({ item }: { item: Service }) => (
@@ -56,17 +103,21 @@ export default function ServicesScreen() {
     >
       <View style={styles.serviceInfo}>
         <Text style={styles.serviceName}>{item.name}</Text>
-        <Text style={styles.serviceDescription}>{item.description}</Text>
-        
+        {item.description && (
+          <Text style={styles.serviceDescription}>{item.description}</Text>
+        )}
+
         <View style={styles.serviceDetails}>
           <View style={styles.serviceDetail}>
             <Clock size={16} color={Colors.neutral[500]} />
-            <Text style={styles.detailText}>{item.duration}</Text>
+            <Text style={styles.detailText}>
+              {formatDuration(item.duration)}
+            </Text>
           </View>
-          
+
           <View style={styles.serviceDetail}>
             <DollarSign size={16} color={Colors.neutral[500]} />
-            <Text style={styles.detailText}>{item.price}</Text>
+            <Text style={styles.detailText}>${item.price.toFixed(2)}</Text>
           </View>
         </View>
       </View>
@@ -84,35 +135,33 @@ export default function ServicesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTextContainer}>
-          <Text style={styles.headerTitle}>
-            Select a Service
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {barberName as string}
-          </Text>
+          <Text style={styles.headerTitle}>Select a Service</Text>
+          <Text style={styles.headerSubtitle}>{barberName as string}</Text>
         </View>
-        
+
         <View style={styles.placeholder} />
       </View>
 
       <View style={styles.content}>
         {services.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No services available for this barber.</Text>
+            <Text style={styles.emptyText}>
+              No services available for this barber.
+            </Text>
           </View>
         ) : (
           <FlatList
             data={services}
             renderItem={renderServiceItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
           />
@@ -122,6 +171,7 @@ export default function ServicesScreen() {
   );
 }
 
+// Keep your existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
