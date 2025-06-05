@@ -45,52 +45,51 @@ export default function AppointmentsScreen() {
   const [loading, setLoading] = useState(true);
 
   const isAdmin = profile?.is_admin;
-
+  // Update the useEffect hooks to properly handle loading sequence
   useEffect(() => {
-    const fetchUser = async () => {
+    const fetchData = async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       setSession(session);
 
       if (session) {
-        const { data } = await supabase
+        const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
-        setProfile(data || null);
+        setProfile(profile || null);
+
+        // Load appointments only after we have both session and profile
+        loadAppointments(session, profile?.is_admin);
+      } else {
+        setAppointments([]);
       }
     };
 
-    fetchUser();
+    fetchData();
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (!session) setAppointments([]);
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    // if (session) {
-    loadAppointments();
-    // }
-  }, []);
-
-  // Update the useEffect that loads appointments
-  useEffect(() => {
-    if (session) {
-      // Only load appointments if session exists
-      loadAppointments();
-    }
-  }, [session]); // Add session as dependency
-
-  // Update the loadAppointments function
-  const loadAppointments = async () => {
+  // Update loadAppointments to accept session and isAdmin as parameters
+  const loadAppointments = async (
+    currentSession: Session | null,
+    currentIsAdmin?: boolean
+  ) => {
     try {
       setLoading(true);
 
       // Ensure we have a session before proceeding
-      if (!session) {
+      if (!currentSession) {
         setAppointments([]);
         return;
       }
@@ -109,8 +108,8 @@ export default function AppointmentsScreen() {
     `);
 
       // Only filter by user_id if not admin
-      if (!isAdmin) {
-        query = query.eq('profile_id', session.user.id);
+      if (!currentIsAdmin) {
+        query = query.eq('profile_id', currentSession.user.id);
       }
 
       // Order by date (newest first)
@@ -124,7 +123,7 @@ export default function AppointmentsScreen() {
       const formattedAppointments =
         data?.map((appointment) => ({
           ...appointment,
-          user_id: appointment.profile_id, // Map profile_id to user_id
+          user_id: appointment.profile_id,
           barber_name: appointment.barbers?.name,
           service_name: appointment.services?.name,
           formatted_date: formatDate(appointment.appointment_date),

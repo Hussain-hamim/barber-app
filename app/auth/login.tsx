@@ -64,20 +64,14 @@ export default function LoginScreen() {
 
       if (success) {
         // Show success message with role information
-        Alert.alert(
-          'Login Successful',
-          `Welcome back! You're logged in as ${
-            isAdmin ? 'an admin' : 'a customer'
-          }`,
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                router.replace('/(tabs)');
-              },
+        Alert.alert('Login Successful', `Welcome back! You're logged in`, [
+          {
+            text: 'Continue',
+            onPress: () => {
+              router.replace('/(tabs)');
             },
-          ]
-        );
+          },
+        ]);
       } else {
         throw new Error(error || 'Login failed. Please try again.');
       }
@@ -145,18 +139,6 @@ export default function LoginScreen() {
             onRightIconPress={() => setShowPassword(!showPassword)}
             error={errors.password}
           />
-
-          <View style={styles.adminContainer}>
-            <TouchableOpacity
-              style={styles.checkboxContainer}
-              onPress={() => setIsAdmin(!isAdmin)}
-            >
-              <View style={[styles.checkbox, isAdmin && styles.checkboxActive]}>
-                {isAdmin && <View style={styles.checkboxInner} />}
-              </View>
-              <Text style={styles.adminText}>Login as Admin</Text>
-            </TouchableOpacity>
-          </View>
 
           <Button
             title="Log In"

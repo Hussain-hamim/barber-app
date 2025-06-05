@@ -202,20 +202,6 @@ export default function RegisterScreen() {
             error={errors.confirmPassword}
           />
 
-          {/* Admin toggle */}
-          <View style={styles.adminToggle}>
-            <Text style={styles.adminLabel}>Register as admin?</Text>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                isAdmin && styles.toggleButtonActive,
-              ]}
-              onPress={() => setIsAdmin(!isAdmin)}
-            >
-              <Text style={styles.toggleText}>{isAdmin ? 'Yes' : 'No'}</Text>
-            </TouchableOpacity>
-          </View>
-
           <Button
             title="Sign Up"
             onPress={handleRegister}
