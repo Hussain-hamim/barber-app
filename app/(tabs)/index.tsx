@@ -401,6 +401,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
     overflow: 'hidden',
+    paddingBottom: 20,
     ...Shadows.sm,
   },
   imageWrapper: {
@@ -492,9 +493,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: Colors.primary[100],
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
     borderRadius: Radius.sm,
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
   },
 
   aboutText: {
