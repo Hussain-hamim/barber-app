@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
@@ -29,6 +30,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { sendPushNotification } from '@/services/notifications';
 
+interface BookedTime {
+  time: string;
+  profileId: string;
+}
+
 export default function BookingScreen() {
   const router = useRouter();
   const { session } = useAuth();
@@ -48,17 +54,37 @@ export default function BookingScreen() {
   const [selectedDate, setSelectedDate] = useState<string>(formattedToday);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
+  const [bookedTimes, setBookedTimes] = useState<BookedTime[]>([]);
   const [loadingTimes, setLoadingTimes] = useState(false);
 
   const handleDateSelect = (day: any) => {
     setSelectedDate(day.dateString);
-    setSelectedTime(null); // Reset time selection when date changes
+    setSelectedTime(null);
   };
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
+  };
+
+  // Convert display time (HH:MM AM/PM) to database format (HH:MM:SS)
+  const convertToDbTime = (displayTime: string): string => {
+    const [timePart, period] = displayTime.split(' ');
+    let [hours, minutes] = timePart.split(':');
+    let hourNum = parseInt(hours, 10);
+
+    if (period === 'PM' && hourNum < 12) hourNum += 12;
+    if (period === 'AM' && hourNum === 12) hourNum = 0;
+
+    return `${hourNum.toString().padStart(2, '0')}:${minutes}:00`;
+  };
+
+  // Convert database time (HH:MM:SS) to display format (HH:MM AM/PM)
+  const convertToDisplayTime = (dbTime: string): string => {
+    const [hours, minutes] = dbTime.split(':');
+    const hourNum = parseInt(hours, 10);
+    const period = hourNum >= 12 ? 'PM' : 'AM';
+    const displayHour = hourNum % 12 || 12;
+    return `${displayHour}:${minutes} ${period}`;
   };
 
   // Fetch booked times when date or barber changes
@@ -68,28 +94,20 @@ export default function BookingScreen() {
 
       setLoadingTimes(true);
       try {
-        // Convert date to proper format (YYYY-MM-DD)
-        const dateParts = selectedDate.split('-');
-        const formattedDate = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}`;
-
         const { data, error } = await supabase
           .from('appointments')
-          .select('appointment_time')
+          .select('appointment_time, profile_id')
           .eq('barber_id', barberId)
-          .eq('appointment_date', formattedDate)
-          .eq('status', 'confirmed'); // Changed from .neq('status', 'cancelled') to .eq('status', 'confirmed')
+          .eq('appointment_date', selectedDate) // Only get bookings for selected date
+          .in('status', ['confirmed', 'pending']); // Only count confirmed/pending as booked
 
         if (error) throw error;
 
         if (data) {
-          // Convert database time format (HH:MM:SS) to our display format (HH:MM AM/PM)
-          const booked = data.map((appt) => {
-            const [hours, minutes] = appt.appointment_time.split(':');
-            const hourNum = parseInt(hours, 10);
-            const period = hourNum >= 12 ? 'PM' : 'AM';
-            const displayHour = hourNum % 12 || 12;
-            return `${displayHour}:${minutes} ${period}`;
-          });
+          const booked = data.map((appt) => ({
+            time: convertToDisplayTime(appt.appointment_time),
+            profileId: appt.profile_id,
+          }));
           setBookedTimes(booked);
         }
       } catch (error) {
@@ -100,11 +118,14 @@ export default function BookingScreen() {
     };
 
     fetchBookedTimes();
-  }, [selectedDate, barberId]);
+  }, [selectedDate, barberId]); // This re-runs when selectedDate changes
 
-  // Check if a time slot is available
-  const isTimeSlotAvailable = (time: string) => {
-    return !bookedTimes.includes(time);
+  // 3. Update isTimeSlotAvailable to only check exact time matches
+  const isTimeSlotAvailable = (time: string): boolean => {
+    const dbTime = convertToDbTime(time);
+    return !bookedTimes.some((booked) => {
+      return convertToDbTime(booked.time) === dbTime;
+    });
   };
 
   const handleBookNow = async () => {
@@ -116,17 +137,20 @@ export default function BookingScreen() {
       return;
     }
 
+    // Final availability check
+    if (!isTimeSlotAvailable(selectedTime)) {
+      Alert.alert(
+        'Not Available',
+        'This time slot is no longer available. Please choose another time.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Convert the time string to a proper time format (e.g., "09:00:00")
-      const timeParts = selectedTime.split(' ');
-      const timeValue =
-        timeParts[0].length === 4
-          ? `0${timeParts[0]}:00`
-          : `${timeParts[0]}:00`;
+      const timeValue = convertToDbTime(selectedTime);
 
-      // First get the user's name from their profile
       const { data: userProfile } = await supabase
         .from('profiles')
         .select('name')
@@ -167,7 +191,6 @@ export default function BookingScreen() {
           );
         }
 
-        // Navigate to success screen
         router.push({
           pathname: '/booking-success',
           params: {
@@ -186,16 +209,12 @@ export default function BookingScreen() {
     }
   };
 
-  // Calculate the next 30 days for the calendar
   const getMarkedDates = () => {
     const markedDates: any = {};
-
-    // Mark the selected date
     markedDates[selectedDate] = {
       selected: true,
       selectedColor: Colors.primary[600],
     };
-
     return markedDates;
   };
 
@@ -208,34 +227,28 @@ export default function BookingScreen() {
         >
           <ArrowLeft size={24} color={Colors.neutral[700]} />
         </TouchableOpacity>
-
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Book Appointment</Text>
         </View>
-
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>Appointment Summary</Text>
-
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Barber</Text>
             <Text style={styles.summaryValue}>{barberName}</Text>
           </View>
-
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Service</Text>
             <Text style={styles.summaryValue}>{serviceName}</Text>
           </View>
-
           <View style={styles.summaryRow}>
             <View style={styles.summaryDetail}>
               <Text style={styles.detailLabel}>Price</Text>
               <Text style={styles.detailValue}>${servicePrice}</Text>
             </View>
-
             <View style={styles.summaryDetail}>
               <Text style={styles.detailLabel}>Duration</Text>
               <Text style={styles.detailValue}>{serviceDuration}</Text>
@@ -248,7 +261,6 @@ export default function BookingScreen() {
             <CalendarIcon size={20} color={Colors.primary[600]} />
             <Text style={styles.calendarTitle}>Select Date</Text>
           </View>
-
           <Calendar
             current={selectedDate}
             minDate={formattedToday}
@@ -291,6 +303,9 @@ export default function BookingScreen() {
           <View style={styles.timeHeader}>
             <Clock size={20} color={Colors.primary[600]} />
             <Text style={styles.timeTitle}>Select Time</Text>
+            {loadingTimes && (
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+            )}
           </View>
 
           <View style={styles.timeSlotGrid}>
@@ -344,28 +359,10 @@ export default function BookingScreen() {
   );
 }
 
-// Keep your existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
-  },
-  timeSlotBooked: {
-    backgroundColor: Colors.neutral[100],
-    opacity: 0.6,
-  },
-  timeSlotTextBooked: {
-    color: Colors.neutral[400],
-    textDecorationLine: 'line-through',
-  },
-  timeSlotBookedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    borderRadius: Radius.md,
   },
   header: {
     flexDirection: 'row',
@@ -501,6 +498,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary[600],
     borderWidth: 1,
   },
+  timeSlotBooked: {
+    backgroundColor: Colors.neutral[100],
+  },
   timeSlotText: {
     fontFamily: Typography.families.medium,
     fontSize: Typography.sizes.sm,
@@ -509,6 +509,10 @@ const styles = StyleSheet.create({
   timeSlotTextSelected: {
     color: Colors.primary[700],
   },
+  timeSlotTextBooked: {
+    color: Colors.neutral[400],
+    textDecorationLine: 'line-through',
+  },
   timeSlotCheckmark: {
     position: 'absolute',
     top: -6,
@@ -516,6 +520,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary[600],
     borderRadius: Radius.full,
     padding: 2,
+  },
+  timeSlotBookedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: Radius.md,
   },
   footer: {
     backgroundColor: Colors.white,
