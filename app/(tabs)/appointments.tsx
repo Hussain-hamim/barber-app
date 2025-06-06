@@ -21,6 +21,7 @@ import { Calendar, Clock, User, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import Button from '@/components/Button';
+import { sendPushNotification } from '@/services/notifications';
 
 interface Barber {
   id: string;
@@ -163,6 +164,7 @@ export default function AppointmentsScreen() {
     });
   };
 
+  // ... in your handleUpdateStatus function:
   const handleUpdateStatus = async (
     appointmentId: string,
     newStatus: string
@@ -170,12 +172,31 @@ export default function AppointmentsScreen() {
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      const { error, data: updatedAppointment } = await supabase
         .from('appointments')
         .update({ status: newStatus })
-        .eq('id', appointmentId);
+        .eq('id', appointmentId)
+        .select(
+          `
+        *,
+        profiles (push_token),
+        services (name)
+      `
+        )
+        .single();
 
       if (error) throw error;
+
+      // Send notification to user
+      if (updatedAppointment && updatedAppointment.profiles?.push_token) {
+        const statusText =
+          newStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+        await sendPushNotification(
+          updatedAppointment.profiles.push_token,
+          'Appointment Update',
+          `Your appointment for ${updatedAppointment.services?.name} has been ${statusText}`
+        );
+      }
 
       // Refresh the appointments list
       await loadAppointments(session, isAdmin);

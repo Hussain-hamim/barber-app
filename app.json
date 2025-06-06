@@ -25,10 +25,29 @@
         {
           "photosPermission": "The app accesses your photos to upload barber profile images."
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/barber-app-logo.png",
+          "color": "#ffffff"
+        }
+      ],
+      "@react-native-firebase/app"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "android": {
+      "permissions": ["android.permission.RECORD_AUDIO"],
+      "package": "com.hussainhamim.barberapp",
+      "googleServicesFile": "./google-services.json"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "60a31e94-1ac3-4c6b-98c4-3f819732a355"
+      }
     }
   }
 }

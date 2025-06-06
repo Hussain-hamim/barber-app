@@ -21,8 +21,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  console.log('session: ', session);
-
   useEffect(() => {
     let mounted = true;
 

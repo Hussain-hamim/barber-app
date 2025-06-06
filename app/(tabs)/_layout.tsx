@@ -17,7 +17,6 @@ export default function TabLayout() {
         data: { session },
       } = await supabase.auth.getSession();
       setSession(session);
-      console.log('Session new:', session);
 
       if (session) {
         const { data } = await supabase

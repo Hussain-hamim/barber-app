@@ -27,6 +27,7 @@ import {
 import Button from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { sendPushNotification } from '@/services/notifications';
 
 export default function BookingScreen() {
   const router = useRouter();
@@ -91,6 +92,23 @@ export default function BookingScreen() {
         .select();
 
       if (error) throw error;
+
+      if (data) {
+        // Get admin push token (you'll need to query this from your database)
+        const { data: adminData } = await supabase
+          .from('profiles')
+          .select('push_token')
+          .eq('is_admin', true)
+          .single();
+
+        if (adminData?.push_token) {
+          await sendPushNotification(
+            adminData.push_token,
+            'New Appointment Booking',
+            `${barberName} has a new appointment for ${serviceName}`
+          );
+        }
+      }
 
       if (data) {
         // Navigate to success screen
