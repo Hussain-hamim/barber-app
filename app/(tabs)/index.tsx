@@ -156,12 +156,15 @@ export default function HomeScreen() {
       onPress={() => navigateToServiceDetails(item)}
       activeOpacity={0.9}
     >
+      {/* Image with favorite button */}
       <View style={styles.imageWrapper}>
         <Image
           source={{ uri: item.image_url || 'https://via.placeholder.com/150' }}
           style={styles.fullWidthImage}
           resizeMode="cover"
         />
+        <View style={styles.imageOverlay}></View>
+
         {!isAdmin && (
           <TouchableOpacity
             style={styles.favoriteButton}
@@ -177,9 +180,18 @@ export default function HomeScreen() {
             />
           </TouchableOpacity>
         )}
+
+        {/* Status badge */}
+        {item.is_active === false && (
+          <View style={styles.inactiveBadge}>
+            <Text style={styles.inactiveBadgeText}>Unavailable</Text>
+          </View>
+        )}
       </View>
 
+      {/* Barber details */}
       <View style={styles.detailsWrapper}>
+        {/* Name and rating row */}
         <View style={styles.nameRatingRow}>
           <Text style={styles.barberName} numberOfLines={1}>
             {item.name}
@@ -190,14 +202,26 @@ export default function HomeScreen() {
               color={Colors.warning[500]}
               fill={Colors.warning[500]}
             />
-            <Text>{item.rating?.toFixed(1) || 'N/A'}</Text>
+            <Text style={styles.ratingText}>
+              {item.rating?.toFixed(1) || 'N/A'}
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.experienceText} numberOfLines={2}>
-          {item.experience}
-        </Text>
+        {/* Experience and about */}
+        <View style={styles.infoSection}>
+          <View style={styles.experienceBadge}>
+            <Text style={styles.experienceText}>{item.experience}</Text>
+          </View>
 
+          {item.about && (
+            <Text style={styles.aboutText} numberOfLines={2}>
+              {item.about}
+            </Text>
+          )}
+        </View>
+
+        {/* Admin controls */}
         {isAdmin && (
           <View style={styles.adminButtons}>
             <Button
@@ -212,11 +236,14 @@ export default function HomeScreen() {
                     barberImage: item.image_url,
                     barberExperience: item.experience,
                     barberRating: item.rating?.toString(),
+                    barberAbout: item.about,
+                    isActive: item.is_active?.toString(),
                   },
                 });
               }}
               size="sm"
               variant="outline"
+              style={styles.adminButton}
             />
             <Button
               title="Services"
@@ -225,6 +252,7 @@ export default function HomeScreen() {
                 navigateToServiceDetails(item);
               }}
               size="sm"
+              style={styles.adminButton}
             />
           </View>
         )}
@@ -427,5 +455,57 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     borderRadius: Radius.full,
     padding: Spacing.xs,
+  },
+
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '15%',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+
+  inactiveBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    left: Spacing.sm,
+    backgroundColor: Colors.error[500],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
+  },
+  inactiveBadgeText: {
+    color: Colors.white,
+    fontSize: Typography.sizes.xs,
+    fontFamily: Typography.families.medium,
+  },
+
+  ratingText: {
+    marginLeft: Spacing.xxs,
+    fontFamily: Typography.families.medium,
+  },
+  infoSection: {
+    marginBottom: Spacing.sm,
+  },
+  experienceBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.primary[100],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xxs,
+    borderRadius: Radius.sm,
+    marginBottom: Spacing.xs,
+  },
+
+  aboutText: {
+    color: Colors.neutral[600],
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    lineHeight: 18,
+  },
+
+  adminButton: {
+    flex: 1,
+    marginHorizontal: Spacing.xxs,
   },
 });

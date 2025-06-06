@@ -122,10 +122,9 @@ export default function AddBarberScreen() {
         .insert([
           {
             name,
-            experience,
+            experience: experience + ' years',
             image_url: imageUri,
             about: about || null,
-            rating: rating ? parseFloat(rating) : null,
             is_active: true,
           },
         ])
@@ -220,15 +219,6 @@ export default function AddBarberScreen() {
             multiline
             numberOfLines={4}
             style={styles.textArea}
-          />
-
-          <Input
-            label="Rating (Optional)"
-            placeholder="e.g., 4.5"
-            value={rating}
-            onChangeText={setRating}
-            keyboardType="decimal-pad"
-            leftIcon={<Star size={20} color={Colors.neutral[500]} />}
           />
 
           <Button
