@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -49,6 +49,9 @@ export default function BookingScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
+  const [loadingTimes, setLoadingTimes] = useState(false);
+
   const handleDateSelect = (day: any) => {
     setSelectedDate(day.dateString);
     setSelectedTime(null); // Reset time selection when date changes
@@ -56,6 +59,52 @@ export default function BookingScreen() {
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
+  };
+
+  // Fetch booked times when date or barber changes
+  useEffect(() => {
+    const fetchBookedTimes = async () => {
+      if (!selectedDate || !barberId) return;
+
+      setLoadingTimes(true);
+      try {
+        // Convert date to proper format (YYYY-MM-DD)
+        const dateParts = selectedDate.split('-');
+        const formattedDate = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}`;
+
+        const { data, error } = await supabase
+          .from('appointments')
+          .select('appointment_time')
+          .eq('barber_id', barberId)
+          .eq('appointment_date', formattedDate)
+          .eq('status', 'confirmed'); // Changed from .neq('status', 'cancelled') to .eq('status', 'confirmed')
+
+        if (error) throw error;
+
+        if (data) {
+          // Convert database time format (HH:MM:SS) to our display format (HH:MM AM/PM)
+          const booked = data.map((appt) => {
+            const [hours, minutes] = appt.appointment_time.split(':');
+            const hourNum = parseInt(hours, 10);
+            const period = hourNum >= 12 ? 'PM' : 'AM';
+            const displayHour = hourNum % 12 || 12;
+            return `${displayHour}:${minutes} ${period}`;
+          });
+          setBookedTimes(booked);
+        }
+      } catch (error) {
+        console.error('Error fetching booked times:', error);
+      } finally {
+        setLoadingTimes(false);
+      }
+    };
+
+    fetchBookedTimes();
+  }, [selectedDate, barberId]);
+
+  // Check if a time slot is available
+  const isTimeSlotAvailable = (time: string) => {
+    return !bookedTimes.includes(time);
   };
 
   const handleBookNow = async () => {
@@ -77,6 +126,13 @@ export default function BookingScreen() {
           ? `0${timeParts[0]}:00`
           : `${timeParts[0]}:00`;
 
+      // First get the user's name from their profile
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', session?.user.id)
+        .single();
+
       const { data, error } = await supabase
         .from('appointments')
         .insert([
@@ -94,7 +150,7 @@ export default function BookingScreen() {
       if (error) throw error;
 
       if (data) {
-        // Get admin push token (you'll need to query this from your database)
+        // Get admin push token
         const { data: adminData } = await supabase
           .from('profiles')
           .select('push_token')
@@ -105,12 +161,12 @@ export default function BookingScreen() {
           await sendPushNotification(
             adminData.push_token,
             'New Appointment Booking',
-            `${barberName} has a new appointment for ${serviceName}`
+            `${barberName} has a new appointment for ${serviceName} from ${selectedDate} at ${selectedTime} with ${
+              userProfile?.name || 'a customer'
+            }`
           );
         }
-      }
 
-      if (data) {
         // Navigate to success screen
         router.push({
           pathname: '/booking-success',
@@ -238,30 +294,39 @@ export default function BookingScreen() {
           </View>
 
           <View style={styles.timeSlotGrid}>
-            {TIME_SLOTS.map((time) => (
-              <TouchableOpacity
-                key={time}
-                style={[
-                  styles.timeSlot,
-                  selectedTime === time && styles.timeSlotSelected,
-                ]}
-                onPress={() => handleTimeSelect(time)}
-              >
-                <Text
+            {TIME_SLOTS.map((time) => {
+              const isAvailable = isTimeSlotAvailable(time);
+              return (
+                <TouchableOpacity
+                  key={time}
                   style={[
-                    styles.timeSlotText,
-                    selectedTime === time && styles.timeSlotTextSelected,
+                    styles.timeSlot,
+                    !isAvailable && styles.timeSlotBooked,
+                    selectedTime === time && styles.timeSlotSelected,
                   ]}
+                  onPress={() => isAvailable && handleTimeSelect(time)}
+                  disabled={!isAvailable}
                 >
-                  {time}
-                </Text>
-                {selectedTime === time && (
-                  <View style={styles.timeSlotCheckmark}>
-                    <Check size={12} color={Colors.white} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.timeSlotText,
+                      !isAvailable && styles.timeSlotTextBooked,
+                      selectedTime === time && styles.timeSlotTextSelected,
+                    ]}
+                  >
+                    {time}
+                  </Text>
+                  {selectedTime === time && isAvailable && (
+                    <View style={styles.timeSlotCheckmark}>
+                      <Check size={12} color={Colors.white} />
+                    </View>
+                  )}
+                  {!isAvailable && (
+                    <View style={styles.timeSlotBookedOverlay} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -284,6 +349,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
+  },
+  timeSlotBooked: {
+    backgroundColor: Colors.neutral[100],
+    opacity: 0.6,
+  },
+  timeSlotTextBooked: {
+    color: Colors.neutral[400],
+    textDecorationLine: 'line-through',
+  },
+  timeSlotBookedOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: Radius.md,
   },
   header: {
     flexDirection: 'row',

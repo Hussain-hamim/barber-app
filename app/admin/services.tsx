@@ -37,7 +37,7 @@ interface Service {
   barber_id: string;
   name: string;
   price: number;
-  duration: string; // Changed from interval to string for display
+  duration: string; // This is PostgreSQL interval format like "01:30:00"
   description: string | null;
   is_active: boolean;
 }
@@ -115,41 +115,36 @@ export default function AdminServicesScreen() {
   };
 
   // Convert duration string to display format
-  const formatDuration = (duration: string) => {
-    if (!duration) return '';
-    // Parse ISO 8601 duration format (e.g., PT30M)
-    const matches = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?/);
-    if (!matches) return duration;
+  const formatDuration = (interval: string) => {
+    if (!interval) return '';
 
-    const hours = matches[1]
-      ? `${matches[1]} hour${matches[1] === '1' ? '' : 's'}`
-      : '';
-    const minutes = matches[2]
-      ? `${matches[2]} minute${matches[2] === '1' ? '' : 's'}`
-      : '';
+    // Parse PostgreSQL interval format (e.g., "01:30:00" for 1 hour 30 minutes)
+    const parts = interval.split(':');
+    const hours = parseInt(parts[0]) || 0;
+    const minutes = parseInt(parts[1]) || 0;
 
-    return `${hours} ${minutes}`.trim();
+    const hourText = hours > 0 ? `${hours} hour${hours === 1 ? '' : 's'}` : '';
+    const minuteText =
+      minutes > 0 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : '';
+
+    return `${hourText} ${minuteText}`.trim();
   };
 
   // Convert display format to ISO duration
-  const parseDuration = (displayDuration: string) => {
-    if (!displayDuration) return 'PT0M';
+  const parseDuration = (input: string) => {
+    if (!input) return '00:00:00';
 
-    const parts = displayDuration.split(' ');
-    let hours = 0;
-    let minutes = 0;
+    // Extract numbers only (e.g., "45" → 45, "1h30" → NaN)
+    const totalMinutes = parseInt(input.replace(/[^0-9]/g, '')) || 0;
 
-    parts.forEach((part) => {
-      if (part.includes('hour')) {
-        hours = parseInt(part);
-      } else if (part.includes('minute')) {
-        minutes = parseInt(part);
-      }
-    });
+    // Convert to hours and minutes
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
 
-    return `PT${hours > 0 ? `${hours}H` : ''}${
-      minutes > 0 ? `${minutes}M` : '0M'
-    }`;
+    // Format as HH:MM:00 (PostgreSQL interval)
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:00`;
   };
 
   const handleSaveService = async () => {
@@ -372,7 +367,7 @@ export default function AdminServicesScreen() {
 
               <Input
                 label="Duration *"
-                placeholder="30 minutes"
+                placeholder="minutes"
                 value={serviceDuration}
                 onChangeText={setServiceDuration}
                 leftIcon={<Clock size={20} color={Colors.neutral[500]} />}

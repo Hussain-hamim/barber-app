@@ -111,7 +111,10 @@ export default function AppointmentsScreen() {
         return;
       }
 
-      let query = supabase.from('appointments').select(`
+      let query = supabase
+        .from('appointments')
+        .select(
+          `
       id,
       profile_id,
       barber_id,
@@ -122,7 +125,9 @@ export default function AppointmentsScreen() {
       created_at,
       barbers (name),
       services (name)
-    `);
+    `
+        )
+        .order('created_at', { ascending: false });
 
       // Only filter by user_id if not admin
       if (!currentIsAdmin) {
@@ -164,7 +169,6 @@ export default function AppointmentsScreen() {
     });
   };
 
-  // ... in your handleUpdateStatus function:
   const handleUpdateStatus = async (
     appointmentId: string,
     newStatus: string
@@ -180,7 +184,8 @@ export default function AppointmentsScreen() {
           `
         *,
         profiles (push_token),
-        services (name)
+        services (name),
+        barbers (name)
       `
         )
         .single();
@@ -191,10 +196,15 @@ export default function AppointmentsScreen() {
       if (updatedAppointment && updatedAppointment.profiles?.push_token) {
         const statusText =
           newStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+        const serviceName = updatedAppointment.services?.name || 'your service';
+        const barberName =
+          (updatedAppointment.barbers as { name: string })?.name ||
+          'your barber';
+
         await sendPushNotification(
           updatedAppointment.profiles.push_token,
           'Appointment Update',
-          `Your appointment for ${updatedAppointment.services?.name} has been ${statusText}`
+          `Your appointment with ${barberName} for ${serviceName} has been ${statusText}`
         );
       }
 
