@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   },
 
   ratingText: {
-    marginLeft: Spacing.xxs,
+    marginLeft: Spacing.sm,
     fontFamily: Typography.families.medium,
   },
   infoSection: {
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: Colors.primary[100],
     paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xxs,
+    paddingVertical: Spacing.xs,
     borderRadius: Radius.sm,
     marginBottom: Spacing.xs,
   },
@@ -506,6 +506,6 @@ const styles = StyleSheet.create({
 
   adminButton: {
     flex: 1,
-    marginHorizontal: Spacing.xxs,
+    marginHorizontal: Spacing.xs,
   },
 });
