@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -17,7 +18,7 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { ArrowLeft, Clock, DollarSign } from 'lucide-react-native';
+import { ArrowLeft, Clock, DollarSign, Star } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 
 interface Service {
@@ -35,15 +36,24 @@ export default function ServicesScreen() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [barber, setBarber] = useState<any>(null);
+
   useEffect(() => {
-    const fetchServices = async () => {
+    const fetchData = async () => {
       if (!barberId) return;
 
       try {
         setLoading(true);
 
-        // Fetch active services for this barber from Supabase
-        const { data, error } = await supabase
+        // Fetch barber details along with services
+        const { data: barberData } = await supabase
+          .from('barbers')
+          .select('*')
+          .eq('id', barberId)
+          .single();
+
+        // Fetch services
+        const { data: servicesData, error } = await supabase
           .from('services')
           .select('id, name, price, duration, description')
           .eq('barber_id', barberId)
@@ -52,16 +62,17 @@ export default function ServicesScreen() {
 
         if (error) throw error;
 
-        setServices(data || []);
+        setServices(servicesData || []);
+        setBarber(barberData); // Add this state
       } catch (error) {
-        console.error('Error fetching services:', error);
+        console.error('Error fetching data:', error);
         Alert.alert('Error', 'Failed to load services');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchServices();
+    fetchData();
   }, [barberId]);
 
   const handleSelectService = (service: Service) => {
@@ -151,6 +162,60 @@ export default function ServicesScreen() {
         <View style={styles.placeholder} />
       </View>
 
+      {barber && (
+        <View style={styles.barberCard}>
+          <View style={styles.barberImageContainer}>
+            <Image
+              source={{
+                uri: barber.image_url || 'https://via.placeholder.com/150',
+              }}
+              style={styles.barberImage}
+              resizeMode="cover"
+            />
+          </View>
+
+          <View style={styles.barberInfo}>
+            <Text style={styles.barberName}>{barber.name}</Text>
+
+            <View style={styles.barberMeta}>
+              <View style={styles.barberRating}>
+                <Star
+                  size={16}
+                  color={Colors.warning[500]}
+                  fill={Colors.warning[500]}
+                />
+                <Text style={styles.barberRatingText}>
+                  {barber.rating?.toFixed(1) || 'N/A'}
+                </Text>
+              </View>
+
+              <View style={styles.barberExperience}>
+                <Text style={styles.barberExperienceText}>
+                  {barber.experience || 'Professional barber'}
+                </Text>
+              </View>
+            </View>
+
+            {barber.about && (
+              <Text style={styles.barberAbout} numberOfLines={3}>
+                {barber.about}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      <Text
+        style={{
+          fontFamily: Typography.families.semibold,
+          fontSize: Typography.sizes.lg,
+          color: Colors.neutral[800],
+          paddingHorizontal: Spacing.md,
+        }}
+      >
+        {barber.name} services
+      </Text>
+
       <View style={styles.content}>
         {services.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -217,7 +282,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xl,
   },
   emptyContainer: {
@@ -270,5 +335,71 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.sm,
     color: Colors.neutral[700],
     marginLeft: 4,
+  },
+
+  barberCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    marginBottom: Spacing.xl,
+    padding: Spacing.md,
+    ...Shadows.sm,
+  },
+  barberImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    marginRight: Spacing.md,
+  },
+  barberImage: {
+    width: '100%',
+    height: '100%',
+  },
+  barberInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  barberName: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.lg,
+    color: Colors.neutral[800],
+    marginBottom: Spacing.xs,
+  },
+  barberMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  barberRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.neutral[100],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    marginRight: Spacing.sm,
+  },
+  barberRatingText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    marginLeft: 4,
+  },
+  barberExperience: {
+    backgroundColor: Colors.primary[100],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  barberExperienceText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary[600],
+  },
+  barberAbout: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+    lineHeight: 18,
   },
 });
