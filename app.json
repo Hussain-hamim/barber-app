@@ -32,15 +32,22 @@
           "icon": "./assets/images/barber-app-logo.png"
         }
       ],
-      "@react-native-firebase/app"
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "googleServicesFile": "./assets/google-services.json"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "android": {
       "permissions": ["android.permission.RECORD_AUDIO"],
-      "package": "com.hussainhamim.barberapp",
-      "googleServicesFile": "./android/app/google-services.json"
+      "package": "com.hussainhamim.barberapp"
     },
     "extra": {
       "router": {},
