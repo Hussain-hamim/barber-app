@@ -150,7 +150,7 @@ export default function BookingScreen() {
 
     try {
       const timeValue = convertToDbTime(selectedTime);
-
+      // save appointment to db
       const { data: userProfile } = await supabase
         .from('profiles')
         .select('name')
@@ -181,6 +181,7 @@ export default function BookingScreen() {
           .eq('is_admin', true)
           .single();
 
+        // send push notification to admin about the appointment
         if (adminData?.push_token) {
           await sendPushNotification(
             adminData.push_token,

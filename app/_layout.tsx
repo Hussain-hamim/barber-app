@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import {
@@ -10,8 +10,7 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Notifications from 'expo-notifications';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import {
@@ -19,7 +18,6 @@ import {
   savePushToken,
   setupNotificationListeners,
 } from '@/services/notifications';
-import { NavigationContainer } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();

@@ -176,6 +176,7 @@ export default function AppointmentsScreen() {
     try {
       setLoading(true);
 
+      // get appointment, services, barber and push token data
       const { error, data: updatedAppointment } = await supabase
         .from('appointments')
         .update({ status: newStatus })
