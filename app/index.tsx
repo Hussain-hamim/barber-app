@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Animated } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Animated,
+  ActivityIndicator,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Colors, Typography, Spacing } from '@/constants/theme';
@@ -39,7 +46,20 @@ export default function LandingScreen() {
 
   // Show nothing while loading
   if (isLoading) {
-    return null;
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: Colors.white,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: Spacing.xl,
+        }}
+      >
+        <Text>Loading...</Text>
+        <ActivityIndicator size="large" color="black" />
+      </View>
+    );
   }
 
   return (
