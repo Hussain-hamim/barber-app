@@ -34,6 +34,7 @@ import {
   Edit,
   Check,
 } from 'lucide-react-native';
+import { getFavoriteBarbers, toggleFavorite } from '@/utils/favorites';
 
 interface Barber {
   id: string;
@@ -115,17 +116,35 @@ export default function ProfileScreen() {
           ) || []
         );
 
-        // Fetch barbers
-        const { data: barbers } = await supabase.from('barbers').select('*');
+        // Fetch favorite barbers
+        const favoriteBarbers = await getFavoriteBarbers(session.user.id);
+        setFavoriteBarbers(favoriteBarbers || []);
 
+        // Fetch all barbers (for appointment names)
+        const { data: barbers } = await supabase.from('barbers').select('*');
         setAllBarbers(barbers || []);
-        // Note: You'll need to implement favorite barbers logic based on your database structure
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch profile data');
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add this function to handle removing favorites
+  const handleRemoveFavorite = async (barberId: string) => {
+    if (!session?.user?.id) return;
+
+    try {
+      const success = await toggleFavorite(session.user.id, barberId);
+      if (success === false) {
+        // Only update state if removal was successful
+        setFavoriteBarbers((prev) => prev.filter((b) => b.id !== barberId));
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update favorites');
+      console.error('Error toggling favorite:', error);
     }
   };
 
@@ -146,7 +165,7 @@ export default function ProfileScreen() {
 
       // Pick image
       const { assets, canceled } = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -356,32 +375,47 @@ export default function ProfileScreen() {
               <Heart size={18} color={Colors.primary[600]} />
               <Text style={styles.sectionTitle}>Favorite Barbers</Text>
             </View>
+            {favoriteBarbers.length > 0 && (
+              <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {favoriteBarbers.length > 0 ? (
             favoriteBarbers.map((barber) => (
-              <TouchableOpacity
-                key={barber.id}
-                style={styles.favoriteItem}
-                onPress={() =>
-                  router.push({
-                    pathname: '/services',
-                    params: { barberId: barber.id, barberName: barber.name },
-                  })
-                }
-              >
-                <Image
-                  source={{ uri: barber.image }}
-                  style={styles.favoriteImage}
-                />
-                <View style={styles.favoriteDetails}>
-                  <Text style={styles.favoriteName}>{barber.name}</Text>
-                  <Text style={styles.favoriteExperience}>
-                    {barber.experience}
-                  </Text>
-                </View>
-                <ChevronRight size={20} color={Colors.neutral[400]} />
-              </TouchableOpacity>
+              <View key={barber.id} style={styles.favoriteItemContainer}>
+                <TouchableOpacity
+                  style={styles.favoriteItem}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/services',
+                      params: { barberId: barber.id, barberName: barber.name },
+                    })
+                  }
+                >
+                  <Image
+                    source={{
+                      uri:
+                        barber.image_url || 'https://via.placeholder.com/150',
+                    }}
+                    style={styles.favoriteImage}
+                  />
+                  <View style={styles.favoriteDetails}>
+                    <Text style={styles.favoriteName}>{barber.name}</Text>
+                    <Text style={styles.favoriteExperience}>
+                      {barber.experience}
+                    </Text>
+                  </View>
+                  <ChevronRight size={20} color={Colors.neutral[400]} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeFavoriteButton}
+                  onPress={() => handleRemoveFavorite(barber.id)}
+                >
+                  <X size={18} color={Colors.error[500]} />
+                </TouchableOpacity>
+              </View>
             ))
           ) : (
             <Text style={styles.noItemsText}>No favorite barbers yet</Text>
@@ -652,6 +686,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     marginHorizontal: Spacing.lg,
     borderRadius: Radius.lg,
+    marginBottom: Spacing.md,
     gap: Spacing.sm,
     ...Shadows.sm,
   },
@@ -758,5 +793,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.families.semibold,
     fontSize: Typography.sizes.md,
     color: Colors.white,
+  },
+
+  favoriteItemContainer: {
+    position: 'relative',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.neutral[100],
+  },
+  removeFavoriteButton: {
+    position: 'absolute',
+    right: 40,
+    top: '40%',
+    transform: [{ translateY: -9 }],
+    padding: Spacing.sm,
   },
 });

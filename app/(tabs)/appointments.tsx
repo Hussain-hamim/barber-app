@@ -285,18 +285,22 @@ export default function AppointmentsScreen() {
 
   const renderAppointmentItem = ({ item }: { item: Appointment }) => (
     <View style={styles.appointmentCard}>
+      {/* Header with status and action buttons */}
       <View style={styles.cardHeader}>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: getStatusColor(item.status) },
-          ]}
-        >
-          <Text style={styles.statusText}>
-            {item.status === 'in_progress'
-              ? 'In Progress'
-              : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-          </Text>
+        <View style={styles.headerLeft}>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(item.status) },
+            ]}
+          >
+            <Text style={styles.statusText}>
+              {item.status === 'in_progress'
+                ? 'In Progress'
+                : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            </Text>
+          </View>
+          <Text style={styles.dateText}>{item.formatted_date}</Text>
         </View>
 
         {item.status === 'pending' && !isAdmin && (
@@ -304,7 +308,7 @@ export default function AppointmentsScreen() {
             style={styles.cancelButton}
             onPress={() => handleUpdateStatus(item.id, 'cancelled')}
           >
-            <X size={20} color={Colors.neutral[600]} />
+            <X size={20} color={Colors.error[500]} />
           </TouchableOpacity>
         )}
 
@@ -315,35 +319,75 @@ export default function AppointmentsScreen() {
               style={styles.statusDropdownButton}
               onPress={() => openStatusModal(item)}
             >
-              <Text style={styles.statusDropdownText}>Update Status</Text>
+              <Text style={styles.statusDropdownText}>Update</Text>
               <ChevronDown size={16} color={Colors.primary[500]} />
             </TouchableOpacity>
           )}
       </View>
 
-      <View style={styles.appointmentInfo}>
-        <Text style={styles.appointmentService}>{item.service_name}</Text>
-
-        <View style={styles.infoItem}>
-          <Scissors size={18} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}> {item.barber_name}</Text>
+      {/* Main content */}
+      <View style={styles.appointmentContent}>
+        <View style={styles.serviceSection}>
+          <Scissors size={24} color={Colors.primary[500]} />
+          <View style={styles.serviceInfo}>
+            <Text style={styles.serviceName}>{item.service_name}</Text>
+            <Text style={styles.serviceTime}>
+              <Clock size={16} color={Colors.neutral[500]} />{' '}
+              {item.formatted_time}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.infoItem}>
-          <User size={18} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}> {item.profile_name}</Text>
-        </View>
+        <View style={styles.divider} />
 
-        <View style={styles.infoItem}>
-          <Calendar size={18} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.formatted_date}</Text>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Clock size={18} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.formatted_time}</Text>
+        <View style={styles.professionalSection}>
+          <View style={styles.avatar}>
+            <User size={20} color={Colors.white} />
+          </View>
+          <View style={styles.professionalInfo}>
+            <Text style={styles.professionalLabel}>
+              {isAdmin ? 'Client' : 'Barber'}
+            </Text>
+            <Text style={styles.professionalName}>
+              {isAdmin ? item.profile_name : item.barber_name}
+            </Text>
+          </View>
         </View>
       </View>
+
+      {/* Footer with action buttons */}
+      {!isAdmin && (
+        <View style={styles.cardFooter}>
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: '/services',
+                params: {
+                  barberId: item.barber_id,
+                  barberName: item.barber_name,
+                },
+              })
+            }
+            style={styles.footerButton}
+          >
+            <Text style={styles.footerButtonText}>Reschedule</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: '/services',
+                params: {
+                  barberId: item.barber_id,
+                  barberName: item.barber_name,
+                },
+              })
+            }
+            style={styles.footerButtonPrimary}
+          >
+            <Text style={styles.footerButtonPrimaryText}>View Details</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -497,44 +541,7 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingBottom: Spacing.xl,
   },
-  appointmentCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    marginBottom: Spacing.lg,
-    ...Shadows.sm,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.neutral[100],
-    padding: Spacing.md,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  statusText: {
-    fontFamily: Typography.families.medium,
-    fontSize: Typography.sizes.xs,
-    color: Colors.white,
-  },
-  cancelButton: {
-    padding: 4,
-  },
-  statusDropdownButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-  },
-  statusDropdownText: {
-    fontFamily: Typography.families.medium,
-    fontSize: Typography.sizes.sm,
-    color: Colors.primary[500],
-    marginRight: 4,
-  },
+
   appointmentInfo: {
     padding: Spacing.md,
   },
@@ -596,5 +603,150 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     marginTop: Spacing.md,
+  },
+
+  appointmentCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    marginBottom: Spacing.lg,
+    overflow: 'hidden',
+    ...Shadows.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: Spacing.md,
+    backgroundColor: Colors.neutral[50],
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.neutral[100],
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
+    marginRight: Spacing.sm,
+  },
+  statusText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.xs,
+    color: Colors.white,
+    textTransform: 'capitalize',
+  },
+  dateText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+  },
+  cancelButton: {
+    padding: Spacing.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.error[50],
+  },
+  statusDropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.primary[50],
+  },
+  statusDropdownText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary[500],
+    marginRight: Spacing.xs,
+  },
+  appointmentContent: {
+    padding: Spacing.md,
+  },
+  serviceSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  serviceInfo: {
+    marginLeft: Spacing.md,
+  },
+  serviceName: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.lg,
+    color: Colors.neutral[800],
+    marginBottom: Spacing.xs,
+  },
+  serviceTime: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.neutral[100],
+    marginVertical: Spacing.sm,
+  },
+  professionalSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  professionalInfo: {
+    marginLeft: Spacing.md,
+  },
+  professionalLabel: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+    marginBottom: 2,
+  },
+  professionalName: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[800],
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: Colors.neutral[100],
+    padding: Spacing.sm,
+  },
+  footerButton: {
+    flex: 1,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.sm,
+    marginRight: Spacing.sm,
+    backgroundColor: Colors.neutral[100],
+  },
+  footerButtonText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[700],
+  },
+  footerButtonPrimary: {
+    flex: 1,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.primary[500],
+  },
+  footerButtonPrimaryText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.white,
   },
 });
