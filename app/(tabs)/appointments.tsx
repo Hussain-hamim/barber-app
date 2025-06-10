@@ -19,7 +19,14 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { Calendar, Clock, User, X, ChevronDown } from 'lucide-react-native';
+import {
+  Calendar,
+  Clock,
+  User,
+  X,
+  ChevronDown,
+  Scissors,
+} from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import Button from '@/components/Button';
@@ -59,6 +66,7 @@ interface Appointment {
   barbers?: Barber;
   services?: Service;
   barber_name?: string;
+  profile_name?: string;
   service_name?: string;
   formatted_date?: string;
   formatted_time?: string;
@@ -140,7 +148,8 @@ export default function AppointmentsScreen() {
         status,
         created_at,
         barbers (name),
-        services (name)
+        services (name),
+        profiles (name)
       `
         )
         .order('created_at', { ascending: false });
@@ -161,6 +170,7 @@ export default function AppointmentsScreen() {
           user_id: appointment.profile_id,
           barber_name: appointment.barbers?.name,
           service_name: appointment.services?.name,
+          profile_name: appointment.profiles?.name,
           formatted_date: formatDate(appointment.appointment_date),
           formatted_time: formatTime(appointment.appointment_time),
         })) || [];
@@ -294,7 +304,7 @@ export default function AppointmentsScreen() {
             style={styles.cancelButton}
             onPress={() => handleUpdateStatus(item.id, 'cancelled')}
           >
-            <X size={16} color={Colors.neutral[600]} />
+            <X size={20} color={Colors.neutral[600]} />
           </TouchableOpacity>
         )}
 
@@ -315,17 +325,22 @@ export default function AppointmentsScreen() {
         <Text style={styles.appointmentService}>{item.service_name}</Text>
 
         <View style={styles.infoItem}>
-          <User size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.barber_name}</Text>
+          <Scissors size={18} color={Colors.neutral[500]} />
+          <Text style={styles.infoText}> {item.barber_name}</Text>
         </View>
 
         <View style={styles.infoItem}>
-          <Calendar size={16} color={Colors.neutral[500]} />
+          <User size={18} color={Colors.neutral[500]} />
+          <Text style={styles.infoText}> {item.profile_name}</Text>
+        </View>
+
+        <View style={styles.infoItem}>
+          <Calendar size={18} color={Colors.neutral[500]} />
           <Text style={styles.infoText}>{item.formatted_date}</Text>
         </View>
 
         <View style={styles.infoItem}>
-          <Clock size={16} color={Colors.neutral[500]} />
+          <Clock size={18} color={Colors.neutral[500]} />
           <Text style={styles.infoText}>{item.formatted_time}</Text>
         </View>
       </View>
@@ -454,7 +469,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.md,
     paddingTop: Spacing.xl,
   },
   emptyContainer: {
