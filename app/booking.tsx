@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: Spacing.xl,
+    padding: Spacing.md,
   },
   summaryContainer: {
     backgroundColor: Colors.white,

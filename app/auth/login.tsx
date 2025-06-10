@@ -15,6 +15,7 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/theme';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react-native';
+import { StatusBar } from 'expo-status-bar';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -90,8 +91,9 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <StatusBar style="dark" />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"

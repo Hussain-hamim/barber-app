@@ -5,13 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  FlatList,
-  Image,
   ScrollView,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Pressable,
+  Image,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 import {
   Colors,
   Typography,
@@ -21,11 +26,13 @@ import {
 } from '@/constants/theme';
 import {
   ChevronRight,
-  User as UserIcon,
+  UserIcon,
   Calendar,
   LogOut,
-  Star,
   Heart,
+  X,
+  Edit,
+  Check,
 } from 'lucide-react-native';
 
 interface Barber {
@@ -33,94 +40,182 @@ interface Barber {
   name: string;
   image: string;
   experience: string;
-  created_at: string;
 }
 
 interface Appointment {
   id: string;
-  profile_id: string;
   barber_id: string;
-  service_id: string;
   appointment_date: string;
   appointment_time: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  notes: string | null;
-  created_at: string;
 }
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState<
     Appointment[]
   >([]);
   const [favoriteBarbers, setFavoriteBarbers] = useState<Barber[]>([]);
   const [allBarbers, setAllBarbers] = useState<Barber[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+
+  // Edit Modal States
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // Get session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        setSession(session);
-
-        if (session) {
-          // Get profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          setProfile(profile);
-
-          // Get all barbers
-          const { data: barbers, error: barbersError } = await supabase
-            .from('barbers')
-            .select('*');
-
-          const { data: allAppointments, error: appointmentError } =
-            await supabase
-              .from('appointments')
-              .select('*')
-              .eq('profile_id', session.user.id);
-
-          const upcoming = (allAppointments ?? [])
-            .filter(
-              (appt) => appt.status === 'confirmed' || appt.status === 'pending'
-            )
-            .slice(0, 3); // Just show the next 3
-
-          setUpcomingAppointments(upcoming);
-
-          if (barbersError) throw barbersError;
-          setAllBarbers(barbers || []);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
 
-    // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
+        if (session) fetchData();
       }
     );
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => authListener.subscription.unsubscribe();
   }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setSession(session);
+
+      if (session) {
+        // Fetch profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        setProfile(profile);
+        setEditedName(profile?.name || '');
+        setProfileImage(profile?.profile_image || null);
+
+        // Fetch appointments
+        const { data: appointments } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('profile_id', session.user.id)
+          .order('appointment_date', { ascending: true })
+          .limit(3);
+
+        setUpcomingAppointments(
+          appointments?.filter(
+            (appt: Appointment) =>
+              appt.status === 'confirmed' || appt.status === 'pending'
+          ) || []
+        );
+
+        // Fetch barbers
+        const { data: barbers } = await supabase.from('barbers').select('*');
+
+        setAllBarbers(barbers || []);
+        // Note: You'll need to implement favorite barbers logic based on your database structure
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch profile data');
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImageUpload = async () => {
+    try {
+      setUploading(true);
+
+      // Request permissions
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission required',
+          'Please allow access to your photos to upload images'
+        );
+        return;
+      }
+
+      // Pick image
+      const { assets, canceled } = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (canceled || !assets?.[0]?.base64) return;
+
+      const base64 = assets[0].base64;
+      const fileExt = assets[0].uri.split('.').pop() || 'jpg';
+      const fileName = `${session.user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('barber-images')
+        .upload(filePath, decode(base64), {
+          contentType: `image/${fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('barber-images').getPublicUrl(filePath);
+
+      // Update profile with new image URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ profile_image: publicUrl })
+        .eq('id', session.user.id);
+
+      if (updateError) throw updateError;
+
+      setProfileImage(publicUrl);
+      Alert.alert('Success', 'Profile image updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to upload image');
+      console.error('Error uploading image:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: editedName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', session.user.id);
+
+      if (error) throw error;
+
+      await fetchData();
+      setIsEditModalVisible(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile');
+      console.error('Error updating profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -128,11 +223,16 @@ export default function ProfileScreen() {
       if (error) throw error;
       router.replace('/auth/login');
     } catch (error) {
+      Alert.alert('Error', 'Failed to logout');
       console.error('Error during logout:', error);
     }
   };
 
-  if (loading) {
+  const getBarberName = (barberId: string) => {
+    return allBarbers.find((b) => b.id === barberId)?.name || 'Unknown Barber';
+  };
+
+  if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary[600]} />
@@ -147,11 +247,19 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView style={styles.content}>
+        {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
-            <View style={styles.profileImage}>
-              <UserIcon size={40} color={Colors.white} />
-            </View>
+            {profileImage ? (
+              <Image
+                source={{ uri: profileImage }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <View style={styles.profileImage}>
+                <UserIcon size={40} color={Colors.white} />
+              </View>
+            )}
           </View>
 
           <Text style={styles.userName}>{profile?.name || 'User'}</Text>
@@ -161,106 +269,97 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.editProfileButton}
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => setIsEditModalVisible(true)}
           >
+            <Edit size={16} color={Colors.primary[700]} />
             <Text style={styles.editProfileText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 
-        {upcomingAppointments.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <Calendar size={18} color={Colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
-              </View>
-
+        {/* Upcoming Appointments */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <Calendar size={18} color={Colors.primary[600]} />
+              <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
+            </View>
+            {upcomingAppointments.length > 0 && (
               <TouchableOpacity
                 onPress={() => router.push('/(tabs)/appointments')}
               >
                 <Text style={styles.viewAllText}>View All</Text>
               </TouchableOpacity>
-            </View>
+            )}
+          </View>
 
-            {upcomingAppointments.map((appointment) => {
-              const barber = allBarbers.find(
-                (b) => b.id === appointment.barber_id
-              );
-
-              return (
-                <View key={appointment.id} style={styles.appointmentItem}>
-                  <View style={styles.appointmentDate}>
-                    <Text style={styles.appointmentDateText}>
-                      {new Date(
-                        appointment.appointment_date
-                      ).toLocaleDateString('en-US', {
+          {upcomingAppointments.length > 0 ? (
+            upcomingAppointments.map((appointment) => (
+              <View key={appointment.id} style={styles.appointmentItem}>
+                <View style={styles.appointmentDate}>
+                  <Text style={styles.appointmentDateText}>
+                    {new Date(appointment.appointment_date).toLocaleDateString(
+                      'en-US',
+                      {
                         month: 'short',
                         day: 'numeric',
-                      })}
-                    </Text>
-                  </View>
+                      }
+                    )}
+                  </Text>
+                </View>
 
-                  <View style={styles.appointmentDetails}>
-                    <Text style={styles.appointmentTime}>
-                      {appointment.appointment_time}
-                    </Text>
-                    <Text style={styles.appointmentBarber}>
-                      with {barber?.name || 'Unknown Barber'}
-                    </Text>
-                  </View>
+                <View style={styles.appointmentDetails}>
+                  <Text style={styles.appointmentTime}>
+                    {appointment.appointment_time}
+                  </Text>
+                  <Text style={styles.appointmentBarber}>
+                    with {getBarberName(appointment.barber_id)}
+                  </Text>
+                </View>
 
-                  <View
+                <View
+                  style={[
+                    styles.appointmentStatus,
+                    {
+                      backgroundColor:
+                        appointment.status === 'confirmed'
+                          ? Colors.success[100]
+                          : Colors.warning[100],
+                    },
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.appointmentStatus,
+                      styles.appointmentStatusText,
                       {
-                        backgroundColor:
+                        color:
                           appointment.status === 'confirmed'
-                            ? Colors.success[100]
-                            : Colors.warning[100],
+                            ? Colors.success[700]
+                            : Colors.warning[700],
                       },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.appointmentStatusText,
-                        {
-                          color:
-                            appointment.status === 'confirmed'
-                              ? Colors.success[700]
-                              : Colors.warning[700],
-                        },
-                      ]}
-                    >
-                      {appointment.status.charAt(0).toUpperCase() +
-                        appointment.status.slice(1)}
-                    </Text>
-                  </View>
+                    {appointment.status.charAt(0).toUpperCase() +
+                      appointment.status.slice(1)}
+                  </Text>
                 </View>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <Calendar size={18} color={Colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
               </View>
-            </View>
+            ))
+          ) : (
             <Text style={styles.noItemsText}>No upcoming appointments</Text>
-          </View>
-        )}
+          )}
+        </View>
 
-        {favoriteBarbers.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <Heart size={18} color={Colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Favorite Barbers</Text>
-              </View>
+        {/* Favorite Barbers */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <Heart size={18} color={Colors.primary[600]} />
+              <Text style={styles.sectionTitle}>Favorite Barbers</Text>
             </View>
+          </View>
 
-            {favoriteBarbers.map((barber) => (
+          {favoriteBarbers.length > 0 ? (
+            favoriteBarbers.map((barber) => (
               <TouchableOpacity
                 key={barber.id}
                 style={styles.favoriteItem}
@@ -275,40 +374,99 @@ export default function ProfileScreen() {
                   source={{ uri: barber.image }}
                   style={styles.favoriteImage}
                 />
-
                 <View style={styles.favoriteDetails}>
                   <Text style={styles.favoriteName}>{barber.name}</Text>
                   <Text style={styles.favoriteExperience}>
                     {barber.experience}
                   </Text>
                 </View>
-
                 <ChevronRight size={20} color={Colors.neutral[400]} />
               </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <Heart size={18} color={Colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Favorite Barbers</Text>
-              </View>
-            </View>
+            ))
+          ) : (
             <Text style={styles.noItemsText}>No favorite barbers yet</Text>
-          </View>
-        )}
+          )}
+        </View>
 
+        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <LogOut size={20} color={Colors.error[600]} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Pressable
+              style={styles.closeButton}
+              onPress={() => setIsEditModalVisible(false)}
+            >
+              <X size={24} color={Colors.neutral[500]} />
+            </Pressable>
+
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <TouchableOpacity
+              style={styles.profileImageUpload}
+              onPress={handleImageUpload}
+              disabled={uploading}
+            >
+              {profileImage ? (
+                <Image
+                  source={{ uri: profileImage }}
+                  style={styles.profileImagePreview}
+                />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
+                  <UserIcon size={40} color={Colors.white} />
+                </View>
+              )}
+              {uploading && (
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator color={Colors.white} />
+                </View>
+              )}
+              <View style={styles.editImageBadge}>
+                <Edit size={16} color={Colors.white} />
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editedName}
+              onChangeText={setEditedName}
+              placeholder="Enter your name"
+              placeholderTextColor={Colors.neutral[400]}
+            />
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleUpdateProfile}
+              disabled={loading || !editedName.trim()}
+            >
+              {loading ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <>
+                  <Check size={20} color={Colors.white} />
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-// ... (keep the same styles as before)
 
 const styles = StyleSheet.create({
   container: {
@@ -322,7 +480,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.xl,
+    paddingVertical: Spacing.lg,
     backgroundColor: Colors.white,
     ...Shadows.sm,
   },
@@ -333,11 +491,13 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingBottom: Spacing.md,
   },
   profileSection: {
     backgroundColor: Colors.white,
     paddingVertical: Spacing.xl,
     alignItems: 'center',
+    marginBottom: Spacing.lg,
     ...Shadows.sm,
   },
   profileImageContainer: {
@@ -364,6 +524,9 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   editProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.primary[50],
@@ -376,7 +539,9 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: Colors.white,
-    marginTop: Spacing.lg,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: Radius.lg,
     padding: Spacing.lg,
     ...Shadows.sm,
   },
@@ -485,15 +650,113 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.white,
     padding: Spacing.lg,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xl,
+    marginHorizontal: Spacing.lg,
     borderRadius: Radius.lg,
+    gap: Spacing.sm,
     ...Shadows.sm,
   },
   logoutText: {
     fontFamily: Typography.families.medium,
     fontSize: Typography.sizes.md,
     color: Colors.error[600],
-    marginLeft: Spacing.sm,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.xl,
+    ...Shadows.lg,
+  },
+  modalTitle: {
+    fontFamily: Typography.families.bold,
+    fontSize: Typography.sizes.xl,
+    color: Colors.neutral[800],
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    padding: Spacing.sm,
+    zIndex: 1,
+  },
+  profileImageUpload: {
+    alignSelf: 'center',
+    marginBottom: Spacing.lg,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileImagePreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 60,
+    backgroundColor: Colors.primary[600],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editImageBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.primary[600],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.white,
+  },
+  inputLabel: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[600],
+    marginBottom: Spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: Colors.neutral[300],
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[800],
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.primary[600],
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+  },
+  saveButtonText: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.md,
+    color: Colors.white,
   },
 });

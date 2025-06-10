@@ -8,6 +8,11 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/barber-app-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -32,7 +37,8 @@
           "icon": "./assets/images/barber-app-logo.png"
         }
       ],
-      "@react-native-firebase/app"
+      "@react-native-firebase/app",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true

@@ -19,12 +19,12 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { getFavorites, toggleBarberFavorite } from '@/utils/storage';
 import { Heart, Search, Plus, Star } from 'lucide-react-native';
 import Button from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
+import { getFavorites, toggleBarberFavorite } from '@/utils/favorites';
 
 const { height, width } = Dimensions.get('window');
 const CARD_HEIGHT = height * 0.48;
@@ -48,8 +48,43 @@ export default function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = profile?.is_admin;
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      if (session?.user?.id) {
+        // Re-fetch favorites from database
+        const dbFavorites = await getFavorites(session.user.id);
+        setFavorites(dbFavorites);
+
+        // Re-fetch barbers from Supabase
+        const { data: barbersData, error } = await supabase
+          .from('barbers')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Merge with favorites data
+        const barbersWithFavorites =
+          barbersData?.map((barber) => ({
+            ...barber,
+            isFavorite: dbFavorites.includes(barber.id),
+          })) || [];
+
+        setBarbers(barbersWithFavorites);
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      Alert.alert('Error', 'Failed to refresh barbers data');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -77,28 +112,29 @@ export default function HomeScreen() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load favorites from storage
-        const storedFavorites = await getFavorites();
-        // setFavorites(storedFavorites);
+        if (session?.user?.id) {
+          // Load favorites from database
+          const dbFavorites = await getFavorites(session.user.id);
+          setFavorites(dbFavorites);
 
-        // Fetch barbers from Supabase
-        const { data: barbersData, error } = await supabase
-          .from('barbers')
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false });
+          // Fetch barbers from Supabase
+          const { data: barbersData, error } = await supabase
+            .from('barbers')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
 
-        if (error) throw error;
+          if (error) throw error;
 
-        // Merge with favorites data
-        const barbersWithFavorites =
-          barbersData?.map((barber) => ({
-            ...barber,
-            isFavorite: storedFavorites.includes(barber.id),
-            image: barber.image_url, // Map to match your existing component props
-          })) || [];
+          // Merge with favorites data
+          const barbersWithFavorites =
+            barbersData?.map((barber) => ({
+              ...barber,
+              isFavorite: dbFavorites.includes(barber.id),
+            })) || [];
 
-        setBarbers(barbersWithFavorites);
+          setBarbers(barbersWithFavorites);
+        }
       } catch (error) {
         console.error('Error loading data:', error);
         Alert.alert('Error', 'Failed to load barbers data');
@@ -108,25 +144,31 @@ export default function HomeScreen() {
     };
 
     loadData();
-  }, []);
+  }, [session]); // Add session as dependency
 
+  // Update the handleToggleFavorite function:
   const handleToggleFavorite = async (barberId: string) => {
-    try {
-      const newFavoriteState = await toggleBarberFavorite(parseInt(barberId));
+    if (!session?.user?.id) return;
 
-      setBarbers(
-        barbers.map((barber) =>
+    try {
+      const newFavoriteState = await toggleBarberFavorite(
+        session.user.id,
+        barberId
+      );
+
+      setBarbers((prevBarbers) =>
+        prevBarbers.map((barber) =>
           barber.id === barberId
             ? { ...barber, isFavorite: newFavoriteState }
             : barber
         )
       );
 
-      if (newFavoriteState) {
-        setFavorites([...favorites, barberId]);
-      } else {
-        setFavorites(favorites.filter((id) => id !== barberId));
-      }
+      setFavorites((prevFavorites) =>
+        newFavoriteState
+          ? [...prevFavorites, barberId]
+          : prevFavorites.filter((id) => id !== barberId)
+      );
     } catch (error) {
       console.error('Error toggling favorite:', error);
       Alert.alert('Error', 'Failed to update favorites');
@@ -154,7 +196,7 @@ export default function HomeScreen() {
     <TouchableOpacity
       style={[
         styles.cardContainer,
-        { height: CARD_HEIGHT, paddingBottom: isAdmin ? 40 : 5 },
+        { height: CARD_HEIGHT, paddingBottom: isAdmin ? 60 : 5 },
       ]}
       onPress={() => navigateToServiceDetails(item)}
       activeOpacity={0.9}
@@ -266,6 +308,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <StatusBar style="dark" />
         <ActivityIndicator size="large" color={Colors.primary[600]} />
       </View>
     );
@@ -315,9 +358,10 @@ export default function HomeScreen() {
           renderItem={renderBarberItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          // snapToInterval={CARD_HEIGHT + CARD_MARGIN}
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No barbers available</Text>

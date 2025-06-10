@@ -66,6 +66,7 @@ export default function LandingScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="dark" />
       <Animated.View
         style={[
           styles.contentContainer,
