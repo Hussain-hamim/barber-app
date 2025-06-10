@@ -53,7 +53,7 @@ type AppointmentStatus =
   | 'completed'
   | 'cancelled';
 
-interface Appointment {
+export interface Appointment {
   id: string;
   profile_id: string;
   barber_id: string;

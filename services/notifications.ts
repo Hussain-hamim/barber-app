@@ -3,7 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { Appointment } from '@/constants/data';
+import { Appointment } from '@/app/(tabs)/appointments';
 
 // Configure how notifications should be handled when received
 Notifications.setNotificationHandler({
