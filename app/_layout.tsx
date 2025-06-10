@@ -75,6 +75,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <AuthProvider>
+        <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false }} ref={navigationRef}>
           <Stack.Screen name="index" />
           <Stack.Screen

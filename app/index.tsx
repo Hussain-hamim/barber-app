@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 import { TouchableOpacity } from 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -56,6 +57,7 @@ export default function LandingScreen() {
           padding: Spacing.xl,
         }}
       >
+        <StatusBar style="dark" />
         <Text>Loading...</Text>
         <ActivityIndicator size="large" color="black" />
       </View>

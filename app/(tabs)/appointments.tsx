@@ -8,6 +8,8 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -17,11 +19,15 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { Calendar, Clock, User, X } from 'lucide-react-native';
+import { Calendar, Clock, User, X, ChevronDown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import Button from '@/components/Button';
-import { sendPushNotification } from '@/services/notifications';
+import {
+  scheduleReminderNotifications,
+  scheduleReminderNotifications2,
+  sendPushNotification,
+} from '@/services/notifications';
 
 interface Barber {
   id: string;
@@ -33,26 +39,37 @@ interface Service {
   name: string;
 }
 
-type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+type AppointmentStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
 
 interface Appointment {
   id: string;
   profile_id: string;
   barber_id: string;
   service_id: string;
-  appointment_date: string; // ISO date string
-  appointment_time: string; // ISO time string
+  appointment_date: string;
+  appointment_time: string;
   status: AppointmentStatus;
   created_at: string;
   updated_at?: string;
   barbers?: Barber;
   services?: Service;
-  // These are added for convenience in the UI
   barber_name?: string;
   service_name?: string;
   formatted_date?: string;
   formatted_time?: string;
 }
+
+const STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending', color: Colors.neutral[500] },
+  { value: 'confirmed', label: 'Confirmed', color: Colors.success[500] },
+  { value: 'completed', label: 'Completed', color: Colors.neutral[500] },
+  { value: 'cancelled', label: 'Cancelled', color: Colors.error[500] },
+];
 
 export default function AppointmentsScreen() {
   const router = useRouter();
@@ -60,9 +77,12 @@ export default function AppointmentsScreen() {
   const [profile, setProfile] = useState<any>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<Appointment | null>(null);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
 
   const isAdmin = profile?.is_admin;
-  // Update the useEffect hooks to properly handle loading sequence
+
   useEffect(() => {
     const fetchData = async () => {
       const {
@@ -77,8 +97,6 @@ export default function AppointmentsScreen() {
           .eq('id', session.user.id)
           .single();
         setProfile(profile || null);
-
-        // Load appointments only after we have both session and profile
         loadAppointments(session, profile?.is_admin);
       } else {
         setAppointments([]);
@@ -97,7 +115,6 @@ export default function AppointmentsScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Update loadAppointments to accept session and isAdmin as parameters
   const loadAppointments = async (
     currentSession: Session | null,
     currentIsAdmin?: boolean
@@ -105,7 +122,6 @@ export default function AppointmentsScreen() {
     try {
       setLoading(true);
 
-      // Ensure we have a session before proceeding
       if (!currentSession) {
         setAppointments([]);
         return;
@@ -115,33 +131,30 @@ export default function AppointmentsScreen() {
         .from('appointments')
         .select(
           `
-      id,
-      profile_id,
-      barber_id,
-      service_id,
-      appointment_date,
-      appointment_time,
-      status,
-      created_at,
-      barbers (name),
-      services (name)
-    `
+        id,
+        profile_id,
+        barber_id,
+        service_id,
+        appointment_date,
+        appointment_time,
+        status,
+        created_at,
+        barbers (name),
+        services (name)
+      `
         )
         .order('created_at', { ascending: false });
 
-      // Only filter by user_id if not admin
       if (!currentIsAdmin) {
         query = query.eq('profile_id', currentSession.user.id);
       }
 
-      // Order by date (newest first)
       const { data, error } = await query
         .order('appointment_date', { ascending: false })
         .order('appointment_time', { ascending: true });
 
       if (error) throw error;
 
-      // Format the dates and add to appointments
       const formattedAppointments =
         data?.map((appointment: any) => ({
           ...appointment,
@@ -149,9 +162,15 @@ export default function AppointmentsScreen() {
           barber_name: appointment.barbers?.name,
           service_name: appointment.services?.name,
           formatted_date: formatDate(appointment.appointment_date),
+          formatted_time: formatTime(appointment.appointment_time),
         })) || [];
 
       setAppointments(formattedAppointments);
+
+      // Only schedule reminders for non-admin users
+      if (!currentIsAdmin) {
+        await scheduleReminderNotifications(formattedAppointments);
+      }
     } catch (error) {
       console.error('Error loading appointments:', error);
       Alert.alert('Error', 'Failed to load appointments');
@@ -169,34 +188,47 @@ export default function AppointmentsScreen() {
     });
   };
 
+  const formatTime = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':');
+    const hourNum = parseInt(hours, 10);
+    const period = hourNum >= 12 ? 'PM' : 'AM';
+    const displayHour = hourNum % 12 || 12;
+    return `${displayHour}:${minutes} ${period}`;
+  };
+
   const handleUpdateStatus = async (
     appointmentId: string,
-    newStatus: string
+    newStatus: AppointmentStatus
   ) => {
     try {
       setLoading(true);
 
-      // get appointment, services, barber and push token data
       const { error, data: updatedAppointment } = await supabase
         .from('appointments')
-        .update({ status: newStatus })
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', appointmentId)
         .select(
           `
-        *,
-        profiles (push_token),
-        services (name),
-        barbers (name)
-      `
+          *,
+          profiles (push_token),
+          services (name),
+          barbers (name)
+        `
         )
         .single();
 
       if (error) throw error;
 
-      // Send notification to user
-      if (updatedAppointment && updatedAppointment.profiles?.push_token) {
-        const statusText =
-          newStatus === 'confirmed' ? 'confirmed' : 'cancelled';
+      // Send notification to user if status changed by barber
+      if (
+        updatedAppointment &&
+        updatedAppointment.profiles?.push_token &&
+        isAdmin
+      ) {
+        const statusText = newStatus.replace('_', ' ');
         const serviceName = updatedAppointment.services?.name || 'your service';
         const barberName =
           (updatedAppointment.barbers as { name: string })?.name ||
@@ -209,8 +241,8 @@ export default function AppointmentsScreen() {
         );
       }
 
-      // Refresh the appointments list
       await loadAppointments(session, isAdmin);
+      setStatusModalVisible(false);
     } catch (error) {
       console.error('Error updating appointment:', error);
       Alert.alert('Error', 'Failed to update appointment');
@@ -219,10 +251,12 @@ export default function AppointmentsScreen() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: AppointmentStatus) => {
     switch (status) {
       case 'confirmed':
         return Colors.success[500];
+      case 'in_progress':
+        return Colors.neutral[500];
       case 'pending':
         return Colors.warning[500];
       case 'cancelled':
@@ -232,6 +266,11 @@ export default function AppointmentsScreen() {
       default:
         return Colors.neutral[500];
     }
+  };
+
+  const openStatusModal = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setStatusModalVisible(true);
   };
 
   const renderAppointmentItem = ({ item }: { item: Appointment }) => (
@@ -244,7 +283,9 @@ export default function AppointmentsScreen() {
           ]}
         >
           <Text style={styles.statusText}>
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            {item.status === 'in_progress'
+              ? 'In Progress'
+              : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
           </Text>
         </View>
 
@@ -257,32 +298,17 @@ export default function AppointmentsScreen() {
           </TouchableOpacity>
         )}
 
-        {isAdmin && (
-          <View style={styles.adminActions}>
-            {item.status === 'pending' && (
-              <TouchableOpacity
-                style={[
-                  styles.adminActionButton,
-                  { backgroundColor: Colors.success[500] },
-                ]}
-                onPress={() => handleUpdateStatus(item.id, 'confirmed')}
-              >
-                <Text style={styles.adminActionText}>Confirm</Text>
-              </TouchableOpacity>
-            )}
-            {(item.status === 'pending' || item.status === 'confirmed') && (
-              <TouchableOpacity
-                style={[
-                  styles.adminActionButton,
-                  { backgroundColor: Colors.error[500] },
-                ]}
-                onPress={() => handleUpdateStatus(item.id, 'cancelled')}
-              >
-                <Text style={styles.adminActionText}>Cancel</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        {isAdmin &&
+          item.status !== 'completed' &&
+          item.status !== 'cancelled' && (
+            <TouchableOpacity
+              style={styles.statusDropdownButton}
+              onPress={() => openStatusModal(item)}
+            >
+              <Text style={styles.statusDropdownText}>Update Status</Text>
+              <ChevronDown size={16} color={Colors.primary[500]} />
+            </TouchableOpacity>
+          )}
       </View>
 
       <View style={styles.appointmentInfo}>
@@ -300,7 +326,7 @@ export default function AppointmentsScreen() {
 
         <View style={styles.infoItem}>
           <Clock size={16} color={Colors.neutral[500]} />
-          <Text style={styles.infoText}>{item.appointment_time}</Text>
+          <Text style={styles.infoText}>{item.formatted_time}</Text>
         </View>
       </View>
     </View>
@@ -346,12 +372,61 @@ export default function AppointmentsScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
             refreshing={loading}
-            onRefresh={() => {
-              loadAppointments(session, isAdmin);
-            }}
+            onRefresh={() => loadAppointments(session, isAdmin)}
           />
         )}
       </View>
+
+      {/* Status Update Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={statusModalVisible}
+        onRequestClose={() => setStatusModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Update Appointment Status</Text>
+
+            {STATUS_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={({ pressed }) => [
+                  styles.statusOption,
+                  {
+                    backgroundColor: pressed
+                      ? Colors.neutral[100]
+                      : Colors.white,
+                    borderLeftColor: option.color,
+                  },
+                ]}
+                onPress={() =>
+                  selectedAppointment &&
+                  handleUpdateStatus(
+                    selectedAppointment.id,
+                    option.value as AppointmentStatus
+                  )
+                }
+              >
+                <View
+                  style={[
+                    styles.statusIndicator,
+                    { backgroundColor: option.color },
+                  ]}
+                />
+                <Text style={styles.statusOptionText}>{option.label}</Text>
+              </Pressable>
+            ))}
+
+            <Button
+              title="Cancel"
+              onPress={() => setStatusModalVisible(false)}
+              variant="outline"
+              style={styles.modalCancelButton}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -434,19 +509,16 @@ const styles = StyleSheet.create({
   cancelButton: {
     padding: 4,
   },
-  adminActions: {
+  statusDropdownButton: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    alignItems: 'center',
+    padding: 4,
   },
-  adminActionButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-  },
-  adminActionText: {
+  statusDropdownText: {
     fontFamily: Typography.families.medium,
-    fontSize: Typography.sizes.xs,
-    color: Colors.white,
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary[500],
+    marginRight: 4,
   },
   appointmentInfo: {
     padding: Spacing.md,
@@ -468,10 +540,46 @@ const styles = StyleSheet.create({
     color: Colors.neutral[700],
     marginLeft: Spacing.sm,
   },
-  notesText: {
-    fontFamily: Typography.families.regular,
-    fontSize: Typography.sizes.sm,
-    color: Colors.neutral[600],
-    fontStyle: 'italic',
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    ...Shadows.lg,
+  },
+  modalTitle: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.lg,
+    color: Colors.neutral[800],
+    marginBottom: Spacing.lg,
+    textAlign: 'center',
+  },
+  statusOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderLeftWidth: 4,
+  },
+  statusIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+    marginRight: Spacing.sm,
+  },
+  statusOptionText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[800],
+  },
+  modalCancelButton: {
+    marginTop: Spacing.md,
   },
 });

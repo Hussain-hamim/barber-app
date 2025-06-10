@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { Appointment } from '@/constants/data';
 
 // Configure how notifications should be handled when received
 Notifications.setNotificationHandler({
@@ -158,3 +159,158 @@ export function setupNotificationListeners(navigation: any) {
     responseListener.remove();
   };
 }
+
+/////////////////////////
+// sending 1-hour before reminder notification
+
+export const scheduleReminderNotifications = async (
+  appointments: Appointment[]
+) => {
+  try {
+    const now = new Date();
+
+    // Filter only confirmed appointments in the future
+    const futureConfirmedAppointments = appointments.filter((appointment) => {
+      const appointmentDateTime = new Date(
+        `${appointment.appointment_date}T${appointment.appointment_time}`
+      );
+      return appointment.status === 'confirmed' && appointmentDateTime > now;
+    });
+
+    for (const appointment of futureConfirmedAppointments) {
+      const appointmentDateTime = new Date(
+        `${appointment.appointment_date}T${appointment.appointment_time}`
+      );
+      const reminderTime = new Date(
+        appointmentDateTime.getTime() - 60 * 60 * 1000
+      ); // 1 hour before
+
+      if (reminderTime > now) {
+        const timeUntilReminder = reminderTime.getTime() - now.getTime();
+
+        setTimeout(async () => {
+          try {
+            // Get fresh profile data including push token
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('push_token')
+              .eq('id', appointment.profile_id)
+              .single();
+
+            if (profile?.push_token) {
+              await sendPushNotification(
+                profile.push_token,
+                'Appointment Reminder',
+                `You have an appointment with ${
+                  appointment.barbers?.name
+                } for ${appointment.services?.name} at ${formatTime(
+                  appointment.appointment_time
+                )}`,
+                {
+                  appointmentId: appointment.id,
+                  type: 'reminder',
+                }
+              );
+              console.log(`Sent reminder for appointment ${appointment.id}`);
+            }
+          } catch (error) {
+            console.error('Error sending reminder:', error);
+          }
+        }, timeUntilReminder);
+
+        console.log(
+          `Scheduled reminder for ${appointment.id} at ${reminderTime}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error scheduling reminders:', error);
+  }
+};
+
+// Properly formats your database time (17:30:00) to user-friendly format (5:30 PM)
+const formatTime = (timeString: string) => {
+  const [hours, minutes] = timeString.split(':');
+  const hourNum = parseInt(hours, 10);
+  const period = hourNum >= 12 ? 'PM' : 'AM';
+  const displayHour = hourNum % 12 || 12;
+  return `${displayHour}:${minutes} ${period}`;
+};
+
+////////////////////////////////
+// for testing purposes, we will modify the reminder time to 1 minute instead of 1 hour
+export const scheduleReminderNotifications2 = async (
+  appointments: Appointment[]
+) => {
+  try {
+    // Filter only confirmed appointments in the future (including those happening soon)
+    const futureConfirmedAppointments = appointments.filter((appointment) => {
+      const now = new Date();
+      const appointmentDateTime = new Date(
+        `${appointment.appointment_date}T${appointment.appointment_time}`
+      );
+      return appointment.status === 'confirmed' && appointmentDateTime > now;
+    });
+
+    // Schedule notifications for each appointment
+    for (const appointment of futureConfirmedAppointments) {
+      const appointmentDateTime = new Date(
+        `${appointment.appointment_date}T${appointment.appointment_time}`
+      );
+
+      // TESTING MODIFICATION: Change from 1 hour to 1 minute
+      // const reminderTime = new Date(appointmentDateTime.getTime() - 60 * 60 * 1000); // Original (1 hour)
+      const reminderTime = new Date(Date.now() + 60 * 1000); // TESTING: 1 minute from now
+
+      // Only schedule if reminder time is in the future
+      if (reminderTime > new Date()) {
+        const timeUntilReminder = reminderTime.getTime() - Date.now();
+
+        setTimeout(async () => {
+          try {
+            if (
+              appointment.profile_id &&
+              appointment.barbers?.name &&
+              appointment.services?.name
+            ) {
+              // Get the latest profile with push token
+              const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('push_token')
+                .eq('id', appointment.profile_id)
+                .single();
+
+              if (error) throw error;
+
+              if (profile?.push_token) {
+                const barberName = appointment.barbers.name;
+                const serviceName = appointment.services.name;
+                const formattedTime = formatTime(appointment.appointment_time);
+
+                console.log('SENDING TEST REMINDER NOW...');
+
+                await sendPushNotification(
+                  profile.push_token,
+                  'TEST REMINDER: Appointment Soon', // Modified title for testing
+                  `TEST: You have an appointment with ${barberName} for ${serviceName} at ${formattedTime}`,
+                  {
+                    appointmentId: appointment.id,
+                    type: 'test_reminder', // Modified type for testing
+                  }
+                );
+              }
+            }
+          } catch (error) {
+            console.error('Error sending test reminder:', error);
+          }
+        }, timeUntilReminder);
+
+        console.log(
+          `TEST: Scheduled reminder for appointment ${appointment.id} at ${reminderTime}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error scheduling test reminders:', error);
+  }
+};

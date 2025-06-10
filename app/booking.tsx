@@ -99,7 +99,7 @@ export default function BookingScreen() {
           .select('appointment_time, profile_id')
           .eq('barber_id', barberId)
           .eq('appointment_date', selectedDate) // Only get bookings for selected date
-          .in('status', ['confirmed', 'pending']); // Only count confirmed/pending as booked
+          .in('status', ['confirmed']); // Only count confirmed as booked
 
         if (error) throw error;
 

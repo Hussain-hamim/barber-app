@@ -152,7 +152,10 @@ export default function HomeScreen() {
 
   const renderBarberItem = ({ item }: { item: Barber }) => (
     <TouchableOpacity
-      style={[styles.cardContainer, { height: CARD_HEIGHT }]}
+      style={[
+        styles.cardContainer,
+        { height: CARD_HEIGHT, paddingBottom: isAdmin ? 40 : 5 },
+      ]}
       onPress={() => navigateToServiceDetails(item)}
       activeOpacity={0.9}
     >
@@ -223,7 +226,7 @@ export default function HomeScreen() {
 
         {/* Admin controls */}
         {isAdmin && (
-          <View style={styles.adminButtons}>
+          <View style={[styles.adminButtons]}>
             <Button
               title="Edit"
               onPress={(e: any) => {
@@ -400,8 +403,8 @@ const styles = StyleSheet.create({
     marginBottom: CARD_MARGIN,
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
+
     overflow: 'hidden',
-    paddingBottom: 20,
     ...Shadows.sm,
   },
   imageWrapper: {
