@@ -66,7 +66,6 @@ export default function LandingScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
       <Animated.View
         style={[
           styles.contentContainer,
@@ -76,6 +75,7 @@ export default function LandingScreen() {
           },
         ]}
       >
+        <StatusBar style="dark" />
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>HimalByte</Text>
           <Text style={styles.tagline}>Premium Barber Services</Text>
