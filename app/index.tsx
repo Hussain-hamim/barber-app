@@ -6,16 +6,20 @@ import {
   Image,
   Animated,
   ActivityIndicator,
+  useColorScheme,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import * as Shape from 'react-native-svg';
 
 export default function LandingScreen() {
   const router = useRouter();
   const { session, isLoading } = useAuth();
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
@@ -23,13 +27,11 @@ export default function LandingScreen() {
   useEffect(() => {
     if (isLoading) return;
 
-    // If user is already authenticated, redirect to appropriate screen
     if (session) {
       router.replace('/(tabs)');
       return;
     }
 
-    // Only run animations if not loading and no session
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -45,21 +47,25 @@ export default function LandingScreen() {
     ]).start();
   }, [session, isLoading]);
 
-  // Show nothing while loading
+  // Enhanced loading screen
   if (isLoading) {
     return (
       <View
-        style={{
-          flex: 1,
-          backgroundColor: Colors.white,
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: Spacing.xl,
-        }}
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: isDarkMode ? Colors.black : Colors.white },
+        ]}
       >
-        <StatusBar style="dark" />
-        <Text>Loading...</Text>
-        <ActivityIndicator size="large" color="black" />
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <AnimatedLoadingIndicator isDarkMode={isDarkMode} />
+        <Text
+          style={[
+            styles.loadingText,
+            { color: isDarkMode ? Colors.white : Colors.black },
+          ]}
+        >
+          Preparing your experience...
+        </Text>
       </View>
     );
   }
@@ -75,7 +81,7 @@ export default function LandingScreen() {
           },
         ]}
       >
-        <StatusBar style="dark" />
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>HimalByte</Text>
           <Text style={styles.tagline}>Premium Barber Services</Text>
@@ -136,6 +142,56 @@ export default function LandingScreen() {
     </View>
   );
 }
+
+const AnimatedLoadingIndicator = ({ isDarkMode }: { isDarkMode: boolean }) => {
+  const rotation = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+  const color = isDarkMode ? Colors.white : Colors.primary[600];
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.parallel([
+        Animated.timing(rotation, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.timing(scale, {
+            toValue: 1.2,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scale, {
+            toValue: 0.8,
+            duration: 750,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+  }, []);
+
+  const spin = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <View style={styles.loadingIndicatorContainer}>
+      <Animated.View
+        style={[
+          styles.loadingCircle,
+          {
+            transform: [{ rotate: spin }, { scale }],
+            borderColor: color,
+          },
+        ]}
+      />
+      <View style={[styles.loadingInner, { backgroundColor: color }]} />
+    </View>
+  );
+};
 
 interface TouchableButtonProps {
   label: string;
@@ -280,5 +336,39 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: {
     color: Colors.primary[600],
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+  },
+  loadingIndicatorContainer: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  loadingCircle: {
+    position: 'absolute',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 4,
+    borderTopColor: 'transparent',
+    borderLeftColor: 'transparent',
+  },
+  loadingInner: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  loadingText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.md,
+    marginTop: Spacing.xl,
   },
 });

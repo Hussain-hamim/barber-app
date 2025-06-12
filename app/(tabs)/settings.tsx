@@ -19,8 +19,6 @@ import {
 } from '@/constants/theme';
 import {
   Bell,
-  Globe,
-  ShieldCheck,
   CircleHelp as HelpCircle,
   Info,
   ChevronRight,
@@ -30,8 +28,8 @@ import { clearAllData } from '@/utils/storage';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = React.useState(true);
+
   const router = useRouter();
-  const user = { isAdmin: true };
 
   const handleClearData = async () => {
     Alert.alert(
@@ -122,29 +120,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        <SettingsSection title="Account">
-          <SettingsItem
-            icon={<ShieldCheck size={22} color={Colors.primary[600]} />}
-            title="Privacy Settings"
-            subtitle="Manage your data and privacy"
-            onPress={() => {
-              /* Navigate to privacy settings */
-              // router.push('/admin/services');
-            }}
-          />
-
-          {user?.isAdmin && (
-            <SettingsItem
-              icon={<Globe size={22} color={Colors.primary[600]} />}
-              title="Admin Dashboard"
-              subtitle="Manage your barber shop"
-              onPress={() => {
-                /* Navigate to admin dashboard */
-              }}
-            />
-          )}
-        </SettingsSection>
-
         <SettingsSection title="Notifications">
           <SettingsItem
             icon={<Bell size={22} color={Colors.primary[600]} />}
@@ -162,7 +137,7 @@ export default function SettingsScreen() {
             title="Help Center"
             subtitle="Get help with your account"
             onPress={() => {
-              /* Navigate to help center */
+              router.push('/about');
             }}
           />
 
@@ -170,9 +145,7 @@ export default function SettingsScreen() {
             icon={<Info size={22} color={Colors.primary[600]} />}
             title="About Us"
             subtitle="Learn more about HimalByte"
-            onPress={() => {
-              /* Navigate to about us */
-            }}
+            onPress={() => router.push('/about')}
           />
         </SettingsSection>
 
