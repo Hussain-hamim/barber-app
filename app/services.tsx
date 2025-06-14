@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  TextInput,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -18,8 +19,9 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { ArrowLeft, Clock, DollarSign, Star } from 'lucide-react-native';
+import { ArrowLeft, Clock, DollarSign, Star, User } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import Button from '@/components/Button';
 
 interface Service {
   id: string;
@@ -135,6 +137,38 @@ export default function ServicesScreen() {
       </View>
     </TouchableOpacity>
   );
+  const renderReviewItem = ({ item }: { item: Service }) => (
+    <TouchableOpacity
+      style={styles.serviceCard}
+      onPress={() => handleSelectService(item)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.serviceInfo}>
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              justifyContent: 'flex-start',
+            }}
+          >
+            <User size={24} color={'black'} />
+            <Text style={styles.serviceName}>{item.name}</Text>
+          </View>
+          <Text style={styles.serviceName}>* * * * * *</Text>
+        </View>
+        {item.description && (
+          <Text style={styles.serviceDescription}>{item.description}</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 
   if (loading) {
     return (
@@ -224,13 +258,19 @@ export default function ServicesScreen() {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={services}
-            renderItem={renderServiceItem}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-          />
+          <>
+            <FlatList
+              data={services}
+              renderItem={renderServiceItem}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.listContainer}
+            />
+
+            <View style={{ paddingBottom: 10 }}>
+              <Text>Prepare for review section</Text>
+            </View>
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -266,6 +306,7 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     alignItems: 'center',
+    paddingTop: 10,
   },
   headerTitle: {
     fontFamily: Typography.families.semibold,
@@ -297,7 +338,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContainer: {
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing.md,
   },
   serviceCard: {
     backgroundColor: Colors.white,
