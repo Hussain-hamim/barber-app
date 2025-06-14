@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
+  TextInput,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -19,19 +22,20 @@ import {
   Radius,
   Shadows,
 } from '@/constants/theme';
-import { Heart, Search, Plus, Star } from 'lucide-react-native';
+import { Heart, Search, Plus, Star, X } from 'lucide-react-native';
 import Button from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { getFavorites, toggleBarberFavorite } from '@/utils/favorites';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 const { height, width } = Dimensions.get('window');
 const CARD_HEIGHT = height * 0.48;
 const CARD_MARGIN = Spacing.md;
 
 interface Barber {
-  id: string; // Changed from number to string since Supabase uses UUID
+  id: string;
   name: string;
   experience: string;
   image_url: string;
@@ -44,23 +48,41 @@ interface Barber {
 export default function HomeScreen() {
   const router = useRouter();
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [favorites, setFavorites] = useState<string[]>([]); // Changed to string[] for UUID
+  const [filteredBarbers, setFilteredBarbers] = useState<Barber[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const isAdmin = profile?.is_admin;
 
-  const handleRefresh = async () => {
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       if (session?.user?.id) {
-        // Re-fetch favorites from database
         const dbFavorites = await getFavorites(session.user.id);
         setFavorites(dbFavorites);
 
-        // Re-fetch barbers from Supabase
         const { data: barbersData, error } = await supabase
           .from('barbers')
           .select('*')
@@ -69,7 +91,6 @@ export default function HomeScreen() {
 
         if (error) throw error;
 
-        // Merge with favorites data
         const barbersWithFavorites =
           barbersData?.map((barber) => ({
             ...barber,
@@ -77,6 +98,7 @@ export default function HomeScreen() {
           })) || [];
 
         setBarbers(barbersWithFavorites);
+        setFilteredBarbers(barbersWithFavorites);
       }
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -84,7 +106,7 @@ export default function HomeScreen() {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -113,11 +135,9 @@ export default function HomeScreen() {
     const loadData = async () => {
       try {
         if (session?.user?.id) {
-          // Load favorites from database
           const dbFavorites = await getFavorites(session.user.id);
           setFavorites(dbFavorites);
 
-          // Fetch barbers from Supabase
           const { data: barbersData, error } = await supabase
             .from('barbers')
             .select('*')
@@ -126,7 +146,6 @@ export default function HomeScreen() {
 
           if (error) throw error;
 
-          // Merge with favorites data
           const barbersWithFavorites =
             barbersData?.map((barber) => ({
               ...barber,
@@ -134,6 +153,7 @@ export default function HomeScreen() {
             })) || [];
 
           setBarbers(barbersWithFavorites);
+          setFilteredBarbers(barbersWithFavorites);
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -144,9 +164,21 @@ export default function HomeScreen() {
     };
 
     loadData();
-  }, [session]); // Add session as dependency
+  }, [session]);
 
-  // Update the handleToggleFavorite function:
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredBarbers(barbers);
+    } else {
+      const filtered = barbers.filter(
+        (barber) =>
+          barber.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          barber.about?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredBarbers(filtered);
+    }
+  }, [searchQuery, barbers]);
+
   const handleToggleFavorite = async (barberId: string) => {
     if (!session?.user?.id) return;
 
@@ -157,6 +189,14 @@ export default function HomeScreen() {
       );
 
       setBarbers((prevBarbers) =>
+        prevBarbers.map((barber) =>
+          barber.id === barberId
+            ? { ...barber, isFavorite: newFavoriteState }
+            : barber
+        )
+      );
+
+      setFilteredBarbers((prevBarbers) =>
         prevBarbers.map((barber) =>
           barber.id === barberId
             ? { ...barber, isFavorite: newFavoriteState }
@@ -192,117 +232,123 @@ export default function HomeScreen() {
     }
   };
 
+  const toggleSearch = () => {
+    setSearchVisible(!searchVisible);
+    if (searchVisible) {
+      setSearchQuery('');
+      Keyboard.dismiss();
+    }
+  };
+
   const renderBarberItem = ({ item }: { item: Barber }) => (
-    <TouchableOpacity
-      style={[
-        styles.cardContainer,
-        { height: CARD_HEIGHT, paddingBottom: isAdmin ? 60 : 5 },
-      ]}
-      onPress={() => navigateToServiceDetails(item)}
-      activeOpacity={0.9}
-    >
-      {/* Image with favorite button */}
-      <View style={styles.imageWrapper}>
-        <Image
-          source={{ uri: item.image_url || 'https://via.placeholder.com/150' }}
-          style={styles.fullWidthImage}
-          resizeMode="cover"
-        />
-        <View style={styles.imageOverlay}></View>
-
-        {!isAdmin && (
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleToggleFavorite(item.id);
+    <Animated.View entering={FadeIn} exiting={FadeOut}>
+      <TouchableOpacity
+        style={[
+          styles.cardContainer,
+          { height: CARD_HEIGHT, paddingBottom: isAdmin ? 60 : 5 },
+        ]}
+        onPress={() => navigateToServiceDetails(item)}
+        activeOpacity={0.9}
+      >
+        <View style={styles.imageWrapper}>
+          <Image
+            source={{
+              uri: item.image_url || 'https://via.placeholder.com/150',
             }}
-          >
-            <Heart
-              size={24}
-              color={item.isFavorite ? Colors.error[500] : Colors.white}
-              fill={item.isFavorite ? Colors.error[500] : 'none'}
-            />
-          </TouchableOpacity>
-        )}
+            style={styles.fullWidthImage}
+            resizeMode="cover"
+          />
+          {/* <View style={styles.imageOverlay}></View> */}
 
-        {/* Status badge */}
-        {item.is_active === false && (
-          <View style={styles.inactiveBadge}>
-            <Text style={styles.inactiveBadgeText}>Unavailable</Text>
-          </View>
-        )}
-      </View>
+          {!isAdmin && (
+            <TouchableOpacity
+              style={styles.favoriteButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleFavorite(item.id);
+              }}
+            >
+              <Heart
+                size={24}
+                color={item.isFavorite ? Colors.error[500] : Colors.white}
+                fill={item.isFavorite ? Colors.error[500] : 'none'}
+              />
+            </TouchableOpacity>
+          )}
 
-      {/* Barber details */}
-      <View style={styles.detailsWrapper}>
-        {/* Name and rating row */}
-        <View style={styles.nameRatingRow}>
-          <Text style={styles.barberName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <View style={styles.ratingBox}>
-            <Star
-              size={16}
-              color={Colors.warning[500]}
-              fill={Colors.warning[500]}
-            />
-            <Text style={styles.ratingText}>
-              {item.rating?.toFixed(1) || 'N/A'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Experience and about */}
-        <View style={styles.infoSection}>
-          <View style={styles.experienceBadge}>
-            <Text style={styles.experienceText}>{item.experience}</Text>
-          </View>
-
-          {item.about && (
-            <Text style={styles.aboutText} numberOfLines={2}>
-              {item.about}
-            </Text>
+          {item.is_active === false && (
+            <View style={styles.inactiveBadge}>
+              <Text style={styles.inactiveBadgeText}>Unavailable</Text>
+            </View>
           )}
         </View>
 
-        {/* Admin controls */}
-        {isAdmin && (
-          <View style={[styles.adminButtons]}>
-            <Button
-              title="Edit"
-              onPress={(e: any) => {
-                e.stopPropagation();
-                router.push({
-                  pathname: '/admin/edit-barber',
-                  params: {
-                    barberId: item.id,
-                    barberName: item.name,
-                    barberImage: item.image_url,
-                    barberExperience: item.experience,
-                    barberRating: item.rating?.toString(),
-                    barberAbout: item.about,
-                    isActive: item.is_active?.toString(),
-                  },
-                });
-              }}
-              size="sm"
-              variant="outline"
-              style={styles.adminButton}
-            />
-            <Button
-              title="Services"
-              onPress={(e) => {
-                e.stopPropagation();
-                navigateToServiceDetails(item);
-              }}
-              size="sm"
-              style={styles.adminButton}
-            />
+        <View style={styles.detailsWrapper}>
+          <View style={styles.nameRatingRow}>
+            <Text style={styles.barberName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <View style={styles.ratingBox}>
+              <Star
+                size={16}
+                color={Colors.warning[500]}
+                fill={Colors.warning[500]}
+              />
+              <Text style={styles.ratingText}>
+                {item.rating?.toFixed(1) || 'N/A'}
+              </Text>
+            </View>
           </View>
-        )}
-      </View>
-    </TouchableOpacity>
+
+          <View style={styles.infoSection}>
+            <View style={styles.experienceBadge}>
+              <Text style={styles.experienceText}>{item.experience}</Text>
+            </View>
+
+            {item.about && (
+              <Text style={styles.aboutText} numberOfLines={2}>
+                {item.about}
+              </Text>
+            )}
+          </View>
+
+          {isAdmin && (
+            <View style={[styles.adminButtons]}>
+              <Button
+                title="Edit"
+                onPress={(e: any) => {
+                  e.stopPropagation();
+                  router.push({
+                    pathname: '/admin/edit-barber',
+                    params: {
+                      barberId: item.id,
+                      barberName: item.name,
+                      barberImage: item.image_url,
+                      barberExperience: item.experience,
+                      barberRating: item.rating?.toString(),
+                      barberAbout: item.about,
+                      isActive: item.is_active?.toString(),
+                    },
+                  });
+                }}
+                size="sm"
+                variant="outline"
+                style={styles.adminButton}
+              />
+              <Button
+                title="Services"
+                onPress={(e) => {
+                  e.stopPropagation();
+                  navigateToServiceDetails(item);
+                }}
+                size="sm"
+                style={styles.adminButton}
+              />
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
   if (loading) {
@@ -319,20 +365,46 @@ export default function HomeScreen() {
       <StatusBar style="dark" />
 
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>
-            {isAdmin
-              ? 'Admin Dashboard'
-              : 'Hello, ' + (profile?.name || 'there') + '!'}
-          </Text>
-          <Text style={styles.subtitleText}>
-            {isAdmin ? 'Manage your barber shop' : 'Book your next appointment'}
-          </Text>
-        </View>
+        {searchVisible ? (
+          <Animated.View
+            style={styles.searchContainer}
+            entering={FadeIn}
+            exiting={FadeOut}
+          >
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search barbers..."
+              placeholderTextColor={Colors.neutral[400]}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={true}
+            />
+            <TouchableOpacity onPress={toggleSearch} style={styles.searchClose}>
+              <X size={20} color={Colors.neutral[600]} />
+            </TouchableOpacity>
+          </Animated.View>
+        ) : (
+          <View>
+            <Text style={styles.welcomeText}>
+              {isAdmin
+                ? 'Admin Dashboard'
+                : 'Hello, ' + (profile?.name || 'there') + '!'}
+            </Text>
+            <Text style={styles.subtitleText}>
+              {isAdmin
+                ? 'Manage your barber shop'
+                : 'Book your next appointment'}
+            </Text>
+          </View>
+        )}
 
         {!isAdmin && (
-          <TouchableOpacity style={styles.searchButton}>
-            <Search size={24} color={Colors.neutral[700]} />
+          <TouchableOpacity style={styles.searchButton} onPress={toggleSearch}>
+            {searchVisible ? (
+              <X size={24} color={Colors.neutral[700]} />
+            ) : (
+              <Search size={24} color={Colors.neutral[700]} />
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -354,21 +426,38 @@ export default function HomeScreen() {
         </View>
 
         <FlatList
-          data={barbers}
+          data={filteredBarbers}
           renderItem={renderBarberItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          decelerationRate="fast"
           showsVerticalScrollIndicator={false}
           refreshing={refreshing}
           onRefresh={handleRefresh}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
+          removeClippedSubviews={true}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No barbers available</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery
+                  ? 'No matching barbers found'
+                  : 'No barbers available'}
+              </Text>
             </View>
           }
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
         />
       </View>
+
+      {keyboardVisible && !isAdmin && (
+        <Animated.View
+          style={styles.keyboardSpacer}
+          entering={FadeIn}
+          exiting={FadeOut}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -423,6 +512,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.neutral[100],
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    marginRight: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.md,
+    color: Colors.neutral[800],
+    paddingVertical: Spacing.xs,
+  },
+  searchClose: {
+    padding: Spacing.xs,
+  },
   content: {
     flex: 1,
     paddingHorizontal: Spacing.md,
@@ -433,6 +542,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
   },
   sectionTitle: {
     fontFamily: Typography.families.semibold,
@@ -441,13 +551,13 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingBottom: Spacing.xl,
+    paddingHorizontal: Spacing.sm,
   },
   cardContainer: {
     width: '100%',
     marginBottom: CARD_MARGIN,
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
-
     overflow: 'hidden',
     ...Shadows.sm,
   },
@@ -504,7 +614,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     padding: Spacing.xs,
   },
-
   imageOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -513,7 +622,6 @@ const styles = StyleSheet.create({
     height: '15%',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
-
   inactiveBadge: {
     position: 'absolute',
     top: Spacing.sm,
@@ -528,7 +636,6 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     fontFamily: Typography.families.medium,
   },
-
   ratingText: {
     marginLeft: Spacing.sm,
     fontFamily: Typography.families.medium,
@@ -543,16 +650,18 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     marginBottom: 4,
   },
-
   aboutText: {
     color: Colors.neutral[600],
     fontFamily: Typography.families.regular,
     fontSize: Typography.sizes.sm,
     lineHeight: 18,
   },
-
   adminButton: {
     flex: 1,
     marginHorizontal: Spacing.xs,
+  },
+  keyboardSpacer: {
+    height: 20,
+    backgroundColor: Colors.white,
   },
 });

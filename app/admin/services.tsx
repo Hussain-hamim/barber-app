@@ -10,6 +10,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
@@ -27,6 +28,8 @@ import {
   X,
   DollarSign,
   Clock,
+  Star,
+  User,
 } from 'lucide-react-native';
 import Button from '@/components/Button';
 import Input from '@/components/Input';
@@ -37,9 +40,22 @@ interface Service {
   barber_id: string;
   name: string;
   price: number;
-  duration: string; // This is PostgreSQL interval format like "01:30:00"
+  duration: string;
   description: string | null;
   is_active: boolean;
+}
+
+interface Review {
+  id: string;
+  user_id: string;
+  barber_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  profiles: {
+    name: string;
+    profile_image: string | null;
+  };
 }
 
 export default function AdminServicesScreen() {
@@ -47,10 +63,12 @@ export default function AdminServicesScreen() {
   const { barberId } = useLocalSearchParams();
 
   const [services, setServices] = useState<Service[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [barber, setBarber] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentService, setCurrentService] = useState<Service | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   // Form state
   const [serviceName, setServiceName] = useState('');
@@ -83,9 +101,12 @@ export default function AdminServicesScreen() {
         if (error) throw error;
 
         setServices(servicesData || []);
+
+        // Fetch reviews
+        await fetchReviews();
       } catch (error) {
         console.error('Error fetching data:', error);
-        Alert.alert('Error', 'Failed to load services');
+        Alert.alert('Error', 'Failed to load data');
       } finally {
         setLoading(false);
       }
@@ -95,6 +116,36 @@ export default function AdminServicesScreen() {
       fetchData();
     }
   }, [barberId]);
+
+  const fetchReviews = async () => {
+    try {
+      setReviewsLoading(true);
+      const { data: reviewsData, error } = await supabase
+        .from('reviews')
+        .select(
+          `
+          id,
+          user_id,
+          barber_id,
+          rating,
+          comment,
+          created_at,
+          profiles (name, profile_image)
+        `
+        )
+        .eq('barber_id', barberId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setReviews(reviewsData || []);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      Alert.alert('Error', 'Failed to load reviews');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   const openAddModal = () => {
     setCurrentService(null);
@@ -114,11 +165,9 @@ export default function AdminServicesScreen() {
     setModalVisible(true);
   };
 
-  // Convert duration string to display format
   const formatDuration = (interval: string) => {
     if (!interval) return '';
 
-    // Parse PostgreSQL interval format (e.g., "01:30:00" for 1 hour 30 minutes)
     const parts = interval.split(':');
     const hours = parseInt(parts[0]) || 0;
     const minutes = parseInt(parts[1]) || 0;
@@ -130,25 +179,19 @@ export default function AdminServicesScreen() {
     return `${hourText} ${minuteText}`.trim();
   };
 
-  // Convert display format to ISO duration
   const parseDuration = (input: string) => {
     if (!input) return '00:00:00';
 
-    // Extract numbers only (e.g., "45" → 45, "1h30" → NaN)
     const totalMinutes = parseInt(input.replace(/[^0-9]/g, '')) || 0;
-
-    // Convert to hours and minutes
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
 
-    // Format as HH:MM:00 (PostgreSQL interval)
     return `${hours.toString().padStart(2, '0')}:${minutes
       .toString()
       .padStart(2, '0')}:00`;
   };
 
   const handleSaveService = async () => {
-    // Validate form
     if (!serviceName || !servicePrice || !serviceDuration) {
       Alert.alert('Required Fields', 'Please fill in all required fields');
       return;
@@ -167,7 +210,6 @@ export default function AdminServicesScreen() {
       };
 
       if (currentService) {
-        // Update existing service
         const { error } = await supabase
           .from('services')
           .update(serviceData)
@@ -175,14 +217,12 @@ export default function AdminServicesScreen() {
 
         if (error) throw error;
 
-        // Update local state
         setServices(
           services.map((s) =>
             s.id === currentService.id ? { ...s, ...serviceData } : s
           )
         );
       } else {
-        // Add new service
         const { data, error } = await supabase
           .from('services')
           .insert(serviceData)
@@ -216,7 +256,6 @@ export default function AdminServicesScreen() {
           onPress: async () => {
             try {
               setLoading(true);
-              // Soft delete by setting is_active to false
               const { error } = await supabase
                 .from('services')
                 .update({ is_active: false })
@@ -224,13 +263,55 @@ export default function AdminServicesScreen() {
 
               if (error) throw error;
 
-              // Update local state
               setServices(services.filter((service) => service.id !== id));
             } catch (error) {
               console.error('Error deleting service:', error);
               Alert.alert('Error', 'Failed to delete service');
             } finally {
               setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    Alert.alert(
+      'Delete Review',
+      'Are you sure you want to delete this review?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          onPress: async () => {
+            try {
+              setReviewsLoading(true);
+              const { error } = await supabase
+                .from('reviews')
+                .delete()
+                .eq('id', id);
+
+              if (error) throw error;
+
+              setReviews(reviews.filter((review) => review.id !== id));
+
+              // Update barber rating
+              const { data } = await supabase.rpc('calculate_barber_rating', {
+                barber_id: barberId,
+              });
+
+              if (data) {
+                setBarber((prev: any) => ({ ...prev, rating: data }));
+              }
+            } catch (error) {
+              console.error('Error deleting review:', error);
+              Alert.alert('Error', 'Failed to delete review');
+            } finally {
+              setReviewsLoading(false);
             }
           },
         },
@@ -279,6 +360,48 @@ export default function AdminServicesScreen() {
     </View>
   );
 
+  const renderReviewItem = ({ item }: { item: Review }) => (
+    <View style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        {item.profiles.profile_image ? (
+          <Image
+            source={{ uri: item.profiles.profile_image }}
+            style={styles.reviewUserImage}
+          />
+        ) : (
+          <View style={styles.reviewUserPlaceholder}>
+            <User size={20} color={Colors.white} />
+          </View>
+        )}
+        <View style={styles.reviewUserInfo}>
+          <Text style={styles.reviewUserName}>{item.profiles.name}</Text>
+          <View style={styles.reviewRating}>
+            {[...Array(5)].map((_, i) => (
+              <Star
+                key={i}
+                size={16}
+                color={
+                  i < item.rating ? Colors.warning[500] : Colors.neutral[300]
+                }
+                fill={i < item.rating ? Colors.warning[500] : 'transparent'}
+              />
+            ))}
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.reviewDeleteButton}
+          onPress={() => handleDeleteReview(item.id)}
+        >
+          <Trash2 size={16} color={Colors.error[600]} />
+        </TouchableOpacity>
+      </View>
+      {item.comment && <Text style={styles.reviewComment}>{item.comment}</Text>}
+      <Text style={styles.reviewDate}>
+        {new Date(item.created_at).toLocaleDateString()}
+      </Text>
+    </View>
+  );
+
   if (loading && services.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
@@ -307,31 +430,66 @@ export default function AdminServicesScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        <Button
-          title="Add New Service"
-          onPress={openAddModal}
-          leftIcon={<Plus size={18} color={Colors.white} />}
-          style={styles.addButton}
-        />
-
-        {services.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              No services available. Add your first service using the button
-              above.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={services}
-            renderItem={renderServiceItem}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
+      <ScrollView style={styles.scrollContainer}>
+        <View style={styles.content}>
+          <Button
+            title="Add New Service"
+            onPress={openAddModal}
+            leftIcon={<Plus size={18} color={Colors.white} />}
+            style={styles.addButton}
           />
-        )}
-      </View>
+
+          {services.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                No services available. Add your first service using the button
+                above.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={services}
+              renderItem={renderServiceItem}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              contentContainerStyle={styles.listContainer}
+            />
+          )}
+
+          {/* Reviews Section */}
+          <View style={styles.reviewsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Customer Reviews</Text>
+              {barber && (
+                <View style={styles.ratingBadge}>
+                  <Star
+                    size={16}
+                    color={Colors.warning[500]}
+                    fill={Colors.warning[500]}
+                  />
+                  <Text style={styles.ratingText}>
+                    {barber.rating?.toFixed(1) || 'N/A'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {reviewsLoading && reviews.length === 0 ? (
+              <ActivityIndicator size="small" color={Colors.primary[600]} />
+            ) : reviews.length === 0 ? (
+              <Text style={styles.noReviewsText}>No reviews yet</Text>
+            ) : (
+              <FlatList
+                data={reviews}
+                renderItem={renderReviewItem}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                contentContainerStyle={styles.reviewsList}
+              />
+            )}
+          </View>
+        </View>
+      </ScrollView>
 
       <Modal visible={modalVisible} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
@@ -407,6 +565,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  scrollContainer: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,7 +620,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContainer: {
-    paddingBottom: Spacing.xl,
+    paddingBottom: Spacing.md,
   },
   serviceCard: {
     flexDirection: 'row',
@@ -557,5 +718,98 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     marginTop: Spacing.lg,
+  },
+  // Reviews Section
+  reviewsSection: {
+    marginTop: Spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.lg,
+    color: Colors.neutral[800],
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.neutral[100],
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xxs,
+    borderRadius: Radius.sm,
+  },
+  ratingText: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[700],
+    marginLeft: Spacing.xxs,
+  },
+  noReviewsText: {
+    fontFamily: Typography.families.regular,
+    color: Colors.neutral[500],
+    textAlign: 'center',
+    marginVertical: Spacing.lg,
+  },
+  reviewsList: {
+    paddingBottom: Spacing.xl,
+  },
+  reviewCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    ...Shadows.xs,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  reviewUserImage: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    marginRight: Spacing.sm,
+  },
+  reviewUserPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primary[500],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.sm,
+  },
+  reviewUserInfo: {
+    flex: 1,
+  },
+  reviewUserName: {
+    fontFamily: Typography.families.semibold,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[800],
+  },
+  reviewRating: {
+    flexDirection: 'row',
+    marginTop: Spacing.xxs,
+  },
+  reviewDeleteButton: {
+    padding: Spacing.xs,
+  },
+  reviewComment: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.sm,
+    color: Colors.neutral[700],
+    marginBottom: Spacing.xs,
+    lineHeight: 20,
+  },
+  reviewDate: {
+    fontFamily: Typography.families.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.neutral[500],
+    textAlign: 'right',
   },
 });
