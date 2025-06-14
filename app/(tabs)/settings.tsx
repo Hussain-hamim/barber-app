@@ -25,6 +25,7 @@ import {
   Trash,
 } from 'lucide-react-native';
 import { clearAllData } from '@/utils/storage';
+import { StatusBar } from 'expo-status-bar';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = React.useState(true);
@@ -115,6 +116,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>

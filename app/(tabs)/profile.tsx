@@ -41,6 +41,7 @@ interface Barber {
   name: string;
   image: string;
   experience: string;
+  image_url: string;
 }
 
 interface Appointment {
@@ -514,7 +515,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing['2xl'],
     backgroundColor: Colors.white,
     ...Shadows.sm,
   },
@@ -555,6 +556,7 @@ const styles = StyleSheet.create({
     fontFamily: Typography.families.regular,
     fontSize: Typography.sizes.md,
     color: Colors.neutral[600],
+    maxWidth: '90%',
     marginBottom: Spacing.md,
   },
   editProfileButton: {

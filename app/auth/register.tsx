@@ -83,21 +83,17 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      await signUp(name, email, password);
+      const { user, error } = await signUp(name, email, password);
 
-      // Show success message
-      Alert.alert(
-        'Registration Successful',
-        'Your account has been created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.replace('/(tabs)');
-            },
-          },
-        ]
-      );
+      if (error) throw error;
+
+      if (user) {
+        // Redirect to verification screen with email
+        router.push({
+          pathname: '/auth/verify-email',
+          params: { email, name },
+        });
+      }
     } catch (error: any) {
       console.error('Registration error:', error);
       Alert.alert(
@@ -139,7 +135,7 @@ export default function RegisterScreen() {
         <View style={styles.form}>
           <Input
             label="Full Name"
-            placeholder="John Doe"
+            placeholder="Ramesh"
             value={name}
             onChangeText={setName}
             autoCapitalize="words"

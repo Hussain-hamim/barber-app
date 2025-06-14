@@ -150,6 +150,12 @@ export default function LoginScreen() {
             style={styles.loginButton}
           />
 
+          <TouchableOpacity
+            onPress={() => router.push('/auth/forgot-password')}
+          >
+            <Text style={styles.forgotPassword}>Forgot password?</Text>
+          </TouchableOpacity>
+
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>Don't have an account?</Text>
             <TouchableOpacity onPress={() => router.push('/auth/register')}>
@@ -167,6 +173,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     backgroundColor: Colors.white,
     padding: Spacing.xl,
+  },
+
+  forgotPassword: {
+    fontFamily: Typography.families.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary[600],
+    textAlign: 'center',
+    marginTop: Spacing.md,
   },
   backButton: {
     width: 40,
