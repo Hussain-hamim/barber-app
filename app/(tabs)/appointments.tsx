@@ -35,6 +35,7 @@ import {
   scheduleReminderNotifications2,
   sendPushNotification,
 } from '@/services/notifications';
+import BarberLoadingIndicator from '@/components/ModernLoadingIndicator';
 
 interface Barber {
   id: string;
@@ -394,7 +395,8 @@ export default function AppointmentsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary[600]} />
+        {/* <ActivityIndicator size="large" color={Colors.primary[600]} /> */}
+        <BarberLoadingIndicator message="Loading Your Appointments" />
       </View>
     );
   }
@@ -494,6 +496,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
+    marginBottom: 60,
   },
   loadingContainer: {
     flex: 1,
@@ -514,7 +517,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.xl,
+    // paddingTop: Spacing.xl,
   },
   emptyContainer: {
     flex: 1,

@@ -65,14 +65,7 @@ export default function LoginScreen() {
 
       if (success) {
         // Show success message with role information
-        Alert.alert('Login Successful', `Welcome back! You're logged in`, [
-          {
-            text: 'Continue',
-            onPress: () => {
-              router.replace('/(tabs)');
-            },
-          },
-        ]);
+        router.replace('/(tabs)');
       } else {
         throw new Error(error || 'Login failed. Please try again.');
       }

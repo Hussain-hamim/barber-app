@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import Button from '@/components/Button';
+import ModernLoadingIndicator from '@/components/ModernLoadingIndicator';
 
 interface Service {
   id: string;
@@ -300,7 +301,9 @@ export default function ServicesScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary[600]} />
+        {/* <Text>Loading barber details and services</Text> */}
+        {/* <ActivityIndicator size="large" color={Colors.primary[600]} /> */}
+        <ModernLoadingIndicator message="Loading barber details and services" />
       </View>
     );
   }

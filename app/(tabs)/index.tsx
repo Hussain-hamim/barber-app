@@ -29,6 +29,7 @@ import { Session } from '@supabase/supabase-js';
 import { StatusBar } from 'expo-status-bar';
 import { getFavorites, toggleBarberFavorite } from '@/utils/favorites';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import ModernLoadingIndicator from '@/components/ModernLoadingIndicator';
 
 const { height, width } = Dimensions.get('window');
 const CARD_HEIGHT = height * 0.48;
@@ -51,7 +52,7 @@ export default function HomeScreen() {
   const [filteredBarbers, setFilteredBarbers] = useState<Barber[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -134,6 +135,8 @@ export default function HomeScreen() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+
         if (session?.user?.id) {
           const dbFavorites = await getFavorites(session.user.id);
           setFavorites(dbFavorites);
@@ -155,11 +158,11 @@ export default function HomeScreen() {
           setBarbers(barbersWithFavorites);
           setFilteredBarbers(barbersWithFavorites);
         }
+
+        setLoading(false);
       } catch (error) {
         console.error('Error loading data:', error);
         Alert.alert('Error', 'Failed to load barbers data');
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -355,7 +358,7 @@ export default function HomeScreen() {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="dark" />
-        <ActivityIndicator size="large" color={Colors.primary[600]} />
+        <ModernLoadingIndicator />
       </View>
     );
   }

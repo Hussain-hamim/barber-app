@@ -37,7 +37,7 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -98,12 +98,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       //     is_admin: false,
       //   });
       // }
+      setIsLoading(false);
 
       return { user: data.user, error: null };
     } catch (error) {
       return { user: null, error: error as Error };
-    } finally {
-      setIsLoading(false);
     }
   };
 

@@ -35,6 +35,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { getFavoriteBarbers, toggleFavorite } from '@/utils/favorites';
+import BarberLoadingIndicator from '@/components/ModernLoadingIndicator';
 
 interface Barber {
   id: string;
@@ -255,7 +256,7 @@ export default function ProfileScreen() {
   if (loading && !profile) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary[600]} />
+        <BarberLoadingIndicator message="Loading Your Profile" />
       </View>
     );
   }
@@ -507,6 +508,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.neutral[50],
+    paddingBottom: 80,
   },
   loadingContainer: {
     flex: 1,

@@ -44,11 +44,7 @@ export default function VerifyEmailScreen() {
       }
 
       if (session) {
-        Alert.alert(
-          'Email Verified',
-          'Your email has been verified successfully!',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
-        );
+        router.replace('/(tabs)');
       }
 
       if (session?.user) {

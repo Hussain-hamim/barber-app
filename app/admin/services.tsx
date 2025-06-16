@@ -34,6 +34,7 @@ import {
 import Button from '@/components/Button';
 import Input from '@/components/Input';
 import { supabase } from '@/lib/supabase';
+import BarberLoadingIndicator from '@/components/ModernLoadingIndicator';
 
 interface Service {
   id: string;
@@ -406,7 +407,7 @@ export default function AdminServicesScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary[600]} />
+          <BarberLoadingIndicator message="Loading services" />
         </View>
       </SafeAreaView>
     );
